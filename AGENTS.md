@@ -2,6 +2,37 @@
 
 This file is the centralized source of truth for AI coding assistants (Claude Code, GitHub Copilot, Cursor, etc.) working in this repository.
 
+## Context Engineering
+
+This project uses context engineering with agentic tooling. Documentation is structured to support both human developers and AI agents working on this product.
+
+### Documentation Requirements
+
+**All code changes must consider updates to these files:**
+
+| File | Purpose | Audience |
+|------|---------|----------|
+| `README.md` | Project overview, quick start, installation | Humans, GitHub visitors |
+| `documentation/product-summary.md` | High-level product vision and features | Humans, agents needing context |
+| `documentation/product-details.md` | Detailed specifications, UI/UX, workflows | Humans, agents implementing features |
+| `documentation/technical-details.md` | Architecture, APIs, data flows, integrations | Agents, technical implementers |
+
+### Documentation Standards
+
+- **Language**: Concise, professional, unambiguous
+- **Diagrams**: Mermaid preferred for rendering; ASCII for terminal/agent compatibility
+- **Updates**: Every code change that affects behavior, architecture, or user experience must update relevant documentation
+- **Cross-references**: Link between documents to avoid duplication
+
+### Agent Responsibilities
+
+When making code changes, agents must:
+1. Review affected documentation files
+2. Update product-summary.md if features or vision change
+3. Update product-details.md if UI, workflows, or specifications change
+4. Update technical-details.md if architecture, APIs, or data flows change
+5. Update README.md if installation, usage, or quick start changes
+
 ## Project Overview
 
 **gojira-tmux** - A team-based Jira viewer built as a TUI (Terminal User Interface) application in Go using the BubbleTea framework. Provides real-time access to Jira data via the Jira REST API.
@@ -118,9 +149,10 @@ type MockJiraClient struct {
 ### Configuration
 
 Environment variables:
-- `JIRA_URL` - Jira instance URL
-- `JIRA_USERNAME` - Jira username
-- `JIRA_TOKEN` - API token (never commit)
+- `JIRA_API_TOKEN` - Jira API token for REST API authentication
+- `OKTA_CLIENT_SECRET` - Okta OAuth client secret for OIDC flow
+
+See `documentation/technical-details.md` for full authentication architecture.
 
 ## GitHub Actions Workflow
 
