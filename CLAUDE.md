@@ -48,3 +48,6 @@ Always follow red-green-refactor:
 ```bash
 go test ./... && golangci-lint run && go build ./...
 ```
+
+## Recent Changes
+- 001-gojira-tmux: Added [if applicable, e.g., PostgreSQL, CoreData, files or N/A]

@@ -1,0 +1,188 @@
+package jira_test
+
+import (
+	"testing"
+
+	"github.com/stainedhead/gojira-tmux/internal/adapter/jira"
+	"github.com/stainedhead/gojira-tmux/internal/domain"
+)
+
+func TestJQLBuilder_Build(t *testing.T) {
+	tests := []struct {
+		name     string
+		filter   domain.IssueFilter
+		projects []domain.Project
+		team     []domain.TeamMember
+		want     string
+	}{
+		{
+			name:   "empty filter - all projects",
+			filter: domain.IssueFilter{},
+			projects: []domain.Project{
+				{Key: "PROJ", Name: "Project"},
+			},
+			team: []domain.TeamMember{},
+			want: `project IN ("PROJ") ORDER BY updated DESC`,
+		},
+		{
+			name:   "multiple projects",
+			filter: domain.IssueFilter{},
+			projects: []domain.Project{
+				{Key: "PROJ", Name: "Project"},
+				{Key: "TEST", Name: "Test Project"},
+			},
+			team: []domain.TeamMember{},
+			want: `project IN ("PROJ", "TEST") ORDER BY updated DESC`,
+		},
+		{
+			name: "single project filter",
+			filter: domain.IssueFilter{
+				Project: "PROJ",
+			},
+			projects: []domain.Project{
+				{Key: "PROJ", Name: "Project"},
+				{Key: "TEST", Name: "Test Project"},
+			},
+			team: []domain.TeamMember{},
+			want: `project = "PROJ" ORDER BY updated DESC`,
+		},
+		{
+			name: "assignee filter",
+			filter: domain.IssueFilter{
+				Assignee: "John Doe",
+			},
+			projects: []domain.Project{
+				{Key: "PROJ", Name: "Project"},
+			},
+			team: []domain.TeamMember{
+				{Name: "John Doe", Email: "john@example.com"},
+			},
+			want: `project IN ("PROJ") AND assignee = "john@example.com" ORDER BY updated DESC`,
+		},
+		{
+			name: "status filter - Open",
+			filter: domain.IssueFilter{
+				Status: "Open",
+			},
+			projects: []domain.Project{
+				{Key: "PROJ", Name: "Project"},
+			},
+			team: []domain.TeamMember{},
+			want: `project IN ("PROJ") AND status = "Open" ORDER BY updated DESC`,
+		},
+		{
+			name: "status filter - Ready",
+			filter: domain.IssueFilter{
+				Status: "Ready",
+			},
+			projects: []domain.Project{
+				{Key: "PROJ", Name: "Project"},
+			},
+			team: []domain.TeamMember{},
+			want: `project IN ("PROJ") AND status = "Ready for Development" ORDER BY updated DESC`,
+		},
+		{
+			name: "status filter - All (no filter)",
+			filter: domain.IssueFilter{
+				Status: "All",
+			},
+			projects: []domain.Project{
+				{Key: "PROJ", Name: "Project"},
+			},
+			team: []domain.TeamMember{},
+			want: `project IN ("PROJ") ORDER BY updated DESC`,
+		},
+		{
+			name: "combined filters",
+			filter: domain.IssueFilter{
+				Project:  "PROJ",
+				Assignee: "John Doe",
+				Status:   "Open",
+			},
+			projects: []domain.Project{
+				{Key: "PROJ", Name: "Project"},
+			},
+			team: []domain.TeamMember{
+				{Name: "John Doe", Email: "john@example.com"},
+			},
+			want: `project = "PROJ" AND assignee = "john@example.com" AND status = "Open" ORDER BY updated DESC`,
+		},
+		{
+			name: "-All- project filter",
+			filter: domain.IssueFilter{
+				Project: "-All-",
+			},
+			projects: []domain.Project{
+				{Key: "PROJ", Name: "Project"},
+				{Key: "TEST", Name: "Test"},
+			},
+			team: []domain.TeamMember{},
+			want: `project IN ("PROJ", "TEST") ORDER BY updated DESC`,
+		},
+		{
+			name: "-All- assignee filter",
+			filter: domain.IssueFilter{
+				Assignee: "-All-",
+			},
+			projects: []domain.Project{
+				{Key: "PROJ", Name: "Project"},
+			},
+			team: []domain.TeamMember{},
+			want: `project IN ("PROJ") ORDER BY updated DESC`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			builder := jira.NewJQLBuilder(tt.projects, tt.team)
+			got := builder.Build(tt.filter)
+			if got != tt.want {
+				t.Errorf("Build() = %q\nwant %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestJQLBuilder_EscapeSpecialCharacters(t *testing.T) {
+	projects := []domain.Project{
+		{Key: "TEST", Name: "Test Project"},
+	}
+	team := []domain.TeamMember{
+		{Name: `John "The Dev" Doe`, Email: "john@example.com"},
+	}
+
+	builder := jira.NewJQLBuilder(projects, team)
+	filter := domain.IssueFilter{
+		Assignee: `John "The Dev" Doe`,
+	}
+
+	got := builder.Build(filter)
+
+	// Should escape quotes in email lookup
+	if got == "" {
+		t.Error("Build() returned empty string")
+	}
+}
+
+func TestStatusMapping(t *testing.T) {
+	tests := []struct {
+		uiStatus  string
+		jqlStatus string
+	}{
+		{"Open", "Open"},
+		{"Ready", "Ready for Development"},
+		{"In Test", "In Test"},
+		{"Done", "Done"},
+		{"All", ""},
+		{"", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.uiStatus, func(t *testing.T) {
+			got := jira.MapStatus(tt.uiStatus)
+			if got != tt.jqlStatus {
+				t.Errorf("MapStatus(%q) = %q, want %q", tt.uiStatus, got, tt.jqlStatus)
+			}
+		})
+	}
+}

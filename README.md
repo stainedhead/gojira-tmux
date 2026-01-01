@@ -79,8 +79,12 @@ gojira
 |-----|--------|
 | `↑`/`k` | Move up |
 | `↓`/`j` | Move down |
-| `Tab` | Switch panels |
+| `Tab` | Switch focus between panels |
+| `Shift+Tab` | Reverse switch focus |
+| `Enter` | View issue details |
+| `f` | Focus filter bar |
 | `r` | Refresh |
+| `Esc` | Close details/cancel |
 | `q` | Quit |
 
 ## Documentation

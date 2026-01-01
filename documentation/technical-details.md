@@ -77,6 +77,7 @@ internal/
       comments_panel.go     # Issue comments
       styles.go             # lipgloss styles
       keys.go               # Key bindings
+      messages.go           # Message types
 
 pkg/                        # Public reusable packages
 ```
@@ -277,6 +278,7 @@ type TeamMember struct {
 
 ```go
 type Comment struct {
+    ID        string
     Author    string
     Body      string
     Created   time.Time

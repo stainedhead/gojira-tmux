@@ -165,12 +165,16 @@ Displays fields not shown in main table:
 |-----|--------|
 | `↑` / `k` | Move selection up |
 | `↓` / `j` | Move selection down |
+| `←` / `h` | Previous option (in filter bar) |
+| `→` / `l` | Next option (in filter bar) |
 | `Tab` | Cycle focus between panels |
-| `Enter` | Select/activate |
+| `Shift+Tab` | Reverse cycle focus |
+| `Enter` | Select/activate or view issue details |
+| `f` | Focus filter bar |
 | `r` | Refresh current view |
 | `q` | Quit application |
 | `c` | Cancel (during auth) |
-| `Esc` | Cancel/back |
+| `Esc` | Close details or cancel/back |
 
 ## Configuration
 
