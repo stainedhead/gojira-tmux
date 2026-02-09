@@ -2,73 +2,39 @@ package usecase_test
 
 import (
 	"context"
+	"errors"
 	"testing"
-	"time"
 
+	"github.com/stainedhead/gojira-tmux/internal/adapter/auth"
 	"github.com/stainedhead/gojira-tmux/internal/domain"
 	"github.com/stainedhead/gojira-tmux/internal/usecase"
 )
 
 // MockAuthPort is a mock implementation of domain.AuthPort.
 type MockAuthPort struct {
-	StartAuthFlowFunc  func(ctx context.Context) (string, error)
-	WaitForCallbackFunc func(ctx context.Context) (*domain.User, error)
-	CancelAuthFlowFunc func()
-	RefreshSessionFunc func(ctx context.Context) (*domain.User, error)
-	IsSessionValidFunc func() bool
-	LogoutFunc         func() error
+	ValidateTokenFunc func(ctx context.Context, email, token string) (string, error)
+	IsTokenValidFunc  func(ctx context.Context) bool
 }
 
-func (m *MockAuthPort) StartAuthFlow(ctx context.Context) (string, error) {
-	if m.StartAuthFlowFunc != nil {
-		return m.StartAuthFlowFunc(ctx)
+func (m *MockAuthPort) ValidateToken(ctx context.Context, email, token string) (string, error) {
+	if m.ValidateTokenFunc != nil {
+		return m.ValidateTokenFunc(ctx, email, token)
 	}
-	return "https://auth.example.com/authorize", nil
+	return email, nil
 }
 
-func (m *MockAuthPort) WaitForCallback(ctx context.Context) (*domain.User, error) {
-	if m.WaitForCallbackFunc != nil {
-		return m.WaitForCallbackFunc(ctx)
-	}
-	return &domain.User{
-		Email:         "test@example.com",
-		SessionExpiry: time.Now().Add(8 * time.Hour),
-	}, nil
-}
-
-func (m *MockAuthPort) CancelAuthFlow() {
-	if m.CancelAuthFlowFunc != nil {
-		m.CancelAuthFlowFunc()
-	}
-}
-
-func (m *MockAuthPort) RefreshSession(ctx context.Context) (*domain.User, error) {
-	if m.RefreshSessionFunc != nil {
-		return m.RefreshSessionFunc(ctx)
-	}
-	return nil, nil
-}
-
-func (m *MockAuthPort) IsSessionValid() bool {
-	if m.IsSessionValidFunc != nil {
-		return m.IsSessionValidFunc()
+func (m *MockAuthPort) IsTokenValid(ctx context.Context) bool {
+	if m.IsTokenValidFunc != nil {
+		return m.IsTokenValidFunc(ctx)
 	}
 	return false
 }
 
-func (m *MockAuthPort) Logout() error {
-	if m.LogoutFunc != nil {
-		return m.LogoutFunc()
-	}
-	return nil
-}
-
 // MockConfigPort is a mock implementation of domain.ConfigPort.
 type MockConfigPort struct {
-	LoadFunc            func() (*domain.Config, error)
-	GetProjectsFunc     func() []domain.Project
-	GetTeamMembersFunc  func() []domain.TeamMember
-	ValidateUserAccessFunc func(email string) error
+	LoadFunc           func() (*domain.Config, error)
+	GetProjectsFunc    func() []domain.Project
+	GetTeamMembersFunc func() []domain.TeamMember
 }
 
 func (m *MockConfigPort) Load() (*domain.Config, error) {
@@ -96,171 +62,145 @@ func (m *MockConfigPort) GetTeamMembers() []domain.TeamMember {
 	return []domain.TeamMember{{Name: "Test User", Email: "test@example.com"}}
 }
 
-func (m *MockConfigPort) ValidateUserAccess(email string) error {
-	if m.ValidateUserAccessFunc != nil {
-		return m.ValidateUserAccessFunc(email)
+func TestAuthenticate_ValidateAndSaveToken_Success(t *testing.T) {
+	authPort := &MockAuthPort{
+		ValidateTokenFunc: func(_ context.Context, email, _ string) (string, error) {
+			return email, nil
+		},
 	}
-	return nil
-}
+	tokenStore := auth.NewMemoryTokenStore()
 
-func TestAuthenticate_StartLogin(t *testing.T) {
-	authPort := &MockAuthPort{}
-	configPort := &MockConfigPort{}
-
-	uc := usecase.NewAuthenticate(authPort, configPort)
+	uc := usecase.NewAuthenticate(authPort, tokenStore)
 
 	ctx := context.Background()
-	url, err := uc.StartLogin(ctx)
+	err := uc.ValidateAndSaveToken(ctx, "user@example.com", "valid-token")
 
 	if err != nil {
-		t.Errorf("StartLogin() error = %v", err)
+		t.Errorf("ValidateAndSaveToken() error = %v", err)
 	}
-	if url == "" {
-		t.Error("StartLogin() returned empty URL")
+
+	// Verify token was saved
+	got, _ := tokenStore.GetJiraToken()
+	if got != "valid-token" {
+		t.Errorf("stored token = %q, want %q", got, "valid-token")
 	}
 }
 
-func TestAuthenticate_CompleteLogin_Success(t *testing.T) {
+func TestAuthenticate_ValidateAndSaveToken_InvalidCredentials(t *testing.T) {
 	authPort := &MockAuthPort{
-		WaitForCallbackFunc: func(ctx context.Context) (*domain.User, error) {
-			return &domain.User{
-				Email:         "test@example.com",
-				SessionExpiry: time.Now().Add(8 * time.Hour),
-			}, nil
+		ValidateTokenFunc: func(_ context.Context, _, _ string) (string, error) {
+			return "", errors.New("invalid token or email")
 		},
 	}
-	configPort := &MockConfigPort{
-		ValidateUserAccessFunc: func(email string) error {
-			return nil // User is in team
-		},
-	}
+	tokenStore := auth.NewMemoryTokenStore()
 
-	uc := usecase.NewAuthenticate(authPort, configPort)
+	uc := usecase.NewAuthenticate(authPort, tokenStore)
 
 	ctx := context.Background()
-	user, err := uc.CompleteLogin(ctx)
-
-	if err != nil {
-		t.Errorf("CompleteLogin() error = %v", err)
-	}
-	if user == nil {
-		t.Error("CompleteLogin() returned nil user")
-	}
-	if user != nil && user.Email != "test@example.com" {
-		t.Errorf("CompleteLogin() user.Email = %q, want %q", user.Email, "test@example.com")
-	}
-}
-
-func TestAuthenticate_CompleteLogin_UserNotInTeam(t *testing.T) {
-	authPort := &MockAuthPort{
-		WaitForCallbackFunc: func(ctx context.Context) (*domain.User, error) {
-			return &domain.User{
-				Email:         "stranger@example.com",
-				SessionExpiry: time.Now().Add(8 * time.Hour),
-			}, nil
-		},
-	}
-	configPort := &MockConfigPort{
-		ValidateUserAccessFunc: func(email string) error {
-			user := domain.User{Email: email}
-			return user.ValidateTeamMembership([]domain.TeamMember{
-				{Name: "Test User", Email: "test@example.com"},
-			})
-		},
-	}
-
-	uc := usecase.NewAuthenticate(authPort, configPort)
-
-	ctx := context.Background()
-	_, err := uc.CompleteLogin(ctx)
+	err := uc.ValidateAndSaveToken(ctx, "user@example.com", "bad-token")
 
 	if err == nil {
-		t.Error("CompleteLogin() expected error for user not in team, got nil")
+		t.Error("ValidateAndSaveToken() = nil, want error")
+	}
+
+	// Verify token was NOT saved
+	if tokenStore.HasJiraToken() {
+		t.Error("token should not have been saved on validation failure")
 	}
 }
 
-func TestAuthenticate_CheckSession_Valid(t *testing.T) {
+func TestAuthenticate_ValidateAndSaveToken_EmailMismatch(t *testing.T) {
 	authPort := &MockAuthPort{
-		IsSessionValidFunc: func() bool {
-			return true
-		},
-		RefreshSessionFunc: func(ctx context.Context) (*domain.User, error) {
-			return &domain.User{
-				Email:         "test@example.com",
-				SessionExpiry: time.Now().Add(8 * time.Hour),
-			}, nil
+		ValidateTokenFunc: func(_ context.Context, _, _ string) (string, error) {
+			return "other@example.com", nil
 		},
 	}
-	configPort := &MockConfigPort{}
+	tokenStore := auth.NewMemoryTokenStore()
 
-	uc := usecase.NewAuthenticate(authPort, configPort)
+	uc := usecase.NewAuthenticate(authPort, tokenStore)
 
 	ctx := context.Background()
-	user, err := uc.CheckSession(ctx)
+	err := uc.ValidateAndSaveToken(ctx, "user@example.com", "token")
 
-	if err != nil {
-		t.Errorf("CheckSession() error = %v", err)
-	}
-	if user == nil {
-		t.Error("CheckSession() returned nil for valid session")
+	if err == nil {
+		t.Error("ValidateAndSaveToken() = nil, want email mismatch error")
 	}
 }
 
-func TestAuthenticate_CheckSession_Expired(t *testing.T) {
-	authPort := &MockAuthPort{
-		IsSessionValidFunc: func() bool {
-			return false
-		},
-	}
-	configPort := &MockConfigPort{}
+func TestAuthenticate_ValidateAndSaveToken_EmptyInputs(t *testing.T) {
+	authPort := &MockAuthPort{}
+	tokenStore := auth.NewMemoryTokenStore()
 
-	uc := usecase.NewAuthenticate(authPort, configPort)
-
+	uc := usecase.NewAuthenticate(authPort, tokenStore)
 	ctx := context.Background()
-	user, err := uc.CheckSession(ctx)
 
-	if err != nil {
-		t.Errorf("CheckSession() error = %v", err)
+	tests := []struct {
+		name  string
+		email string
+		token string
+	}{
+		{"empty email", "", "token"},
+		{"empty token", "user@example.com", ""},
+		{"both empty", "", ""},
+		{"whitespace email", "   ", "token"},
+		{"whitespace token", "user@example.com", "   "},
 	}
-	if user != nil {
-		t.Error("CheckSession() returned user for expired session")
-	}
-}
 
-func TestAuthenticate_CancelLogin(t *testing.T) {
-	cancelled := false
-	authPort := &MockAuthPort{
-		CancelAuthFlowFunc: func() {
-			cancelled = true
-		},
-	}
-	configPort := &MockConfigPort{}
-
-	uc := usecase.NewAuthenticate(authPort, configPort)
-	uc.CancelLogin()
-
-	if !cancelled {
-		t.Error("CancelLogin() did not cancel auth flow")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := uc.ValidateAndSaveToken(ctx, tt.email, tt.token)
+			if err == nil {
+				t.Error("ValidateAndSaveToken() = nil, want error for empty inputs")
+			}
+		})
 	}
 }
 
-func TestAuthenticate_Logout(t *testing.T) {
-	loggedOut := false
-	authPort := &MockAuthPort{
-		LogoutFunc: func() error {
-			loggedOut = true
-			return nil
-		},
-	}
-	configPort := &MockConfigPort{}
+func TestAuthenticate_HasValidToken(t *testing.T) {
+	ctx := context.Background()
 
-	uc := usecase.NewAuthenticate(authPort, configPort)
-	err := uc.Logout()
+	t.Run("returns true when token exists", func(t *testing.T) {
+		authPort := &MockAuthPort{
+			IsTokenValidFunc: func(_ context.Context) bool {
+				return true
+			},
+		}
+		tokenStore := auth.NewMemoryTokenStore()
+		uc := usecase.NewAuthenticate(authPort, tokenStore)
 
+		if !uc.HasValidToken(ctx) {
+			t.Error("HasValidToken() = false, want true")
+		}
+	})
+
+	t.Run("returns false when no token", func(t *testing.T) {
+		authPort := &MockAuthPort{
+			IsTokenValidFunc: func(_ context.Context) bool {
+				return false
+			},
+		}
+		tokenStore := auth.NewMemoryTokenStore()
+		uc := usecase.NewAuthenticate(authPort, tokenStore)
+
+		if uc.HasValidToken(ctx) {
+			t.Error("HasValidToken() = true, want false")
+		}
+	})
+}
+
+func TestAuthenticate_ClearToken(t *testing.T) {
+	authPort := &MockAuthPort{}
+	tokenStore := auth.NewMemoryTokenStore()
+	_ = tokenStore.SetJiraToken("existing-token")
+
+	uc := usecase.NewAuthenticate(authPort, tokenStore)
+
+	err := uc.ClearToken()
 	if err != nil {
-		t.Errorf("Logout() error = %v", err)
+		t.Errorf("ClearToken() error = %v", err)
 	}
-	if !loggedOut {
-		t.Error("Logout() did not call authPort.Logout()")
+
+	if tokenStore.HasJiraToken() {
+		t.Error("token should have been cleared")
 	}
 }

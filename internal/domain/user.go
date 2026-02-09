@@ -2,15 +2,11 @@ package domain
 
 import (
 	"errors"
-	"fmt"
-	"strings"
-	"time"
 )
 
-// User represents the authenticated user session.
+// User represents the authenticated user.
 type User struct {
-	Email         string    `json:"email"`
-	SessionExpiry time.Time `json:"session_expiry"`
+	Email string `json:"email"`
 }
 
 // Validate checks that the User has valid data.
@@ -21,26 +17,5 @@ func (u *User) Validate() error {
 	if !isValidEmail(u.Email) {
 		return errors.New("user email is invalid")
 	}
-	if u.SessionExpiry.IsZero() {
-		return errors.New("session expiry is required")
-	}
 	return nil
-}
-
-// IsSessionValid returns true if the session has not expired.
-func (u *User) IsSessionValid() bool {
-	if u.SessionExpiry.IsZero() {
-		return false
-	}
-	return time.Now().Before(u.SessionExpiry)
-}
-
-// ValidateTeamMembership checks if the user email exists in the team list.
-func (u *User) ValidateTeamMembership(team []TeamMember) error {
-	for _, m := range team {
-		if strings.EqualFold(m.Email, u.Email) {
-			return nil
-		}
-	}
-	return fmt.Errorf("user %s is not a member of the configured team", u.Email)
 }

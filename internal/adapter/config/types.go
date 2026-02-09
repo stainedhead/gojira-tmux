@@ -10,8 +10,8 @@ type Config = domain.Config
 // JiraConfig re-exports domain.JiraConfig for convenience.
 type JiraConfig = domain.JiraConfig
 
-// OktaConfig re-exports domain.OktaConfig for convenience.
-type OktaConfig = domain.OktaConfig
+// AtlassianConfig re-exports domain.AtlassianConfig for convenience.
+type AtlassianConfig = domain.AtlassianConfig
 
 // CustomFieldConfig re-exports domain.CustomFieldConfig for convenience.
 type CustomFieldConfig = domain.CustomFieldConfig

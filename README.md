@@ -19,9 +19,10 @@ A terminal-based Jira viewer for development teams. View and filter tickets dire
 ## Features
 
 - **Team filtering** - Filter tickets by team member, project, or status
+- **Team member aliases** - Short aliases for quick filtering (e.g., "JohnA" instead of "John Anderson")
 - **Attention indicators** - Red/yellow dots flag issues needing attention
 - **Keyboard navigation** - Full TUI with vim-style keys
-- **Okta SSO** - Enterprise authentication via Okta OIDC
+- **Atlassian API tokens** - Simple, secure authentication via Atlassian API tokens
 - **Secure storage** - API tokens stored in OS keychain
 
 ## Installation
@@ -43,13 +44,9 @@ go install github.com/stainedhead/gojira-tmux/cmd/gojira@latest
 ```yaml
 jira:
   url: "https://your-company.atlassian.net"
-  username: "your-email@company.com"
 
-okta:
-  issuer: "https://your-company.okta.com/oauth2/default"
-  client_id: "your-okta-client-id"
-  callback_port: 8080
-  scopes: ["openid", "profile", "email"]
+atlassian:
+  email: "your-email@company.com"
 
 projects:
   - key: "PROJ"
@@ -58,18 +55,21 @@ projects:
 team:
   - name: "John Doe"
     email: "john.doe@company.com"
+    alias: "JohnD"  # optional short alias for filtering
 ```
 
-2. **Set environment variables**:
+2. **Generate an Atlassian API token** at https://id.atlassian.com/manage/api-tokens
+
+3. **Run** (the app will prompt for your token on first launch):
+
+```bash
+gojira
+```
+
+   Or set the token via environment variable:
 
 ```bash
 export JIRA_API_TOKEN="your-jira-api-token"
-export OKTA_CLIENT_SECRET="your-okta-client-secret"
-```
-
-3. **Run**:
-
-```bash
 gojira
 ```
 

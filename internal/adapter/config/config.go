@@ -53,19 +53,13 @@ func (l *Loader) validate(cfg *domain.Config) error {
 	if !strings.HasPrefix(cfg.Jira.URL, "https://") {
 		return errors.New("jira.url must use HTTPS")
 	}
-	if cfg.Jira.Username == "" {
-		return errors.New("jira.username is required")
-	}
 
-	// Okta validation
-	if cfg.Okta.Issuer == "" {
-		return errors.New("okta.issuer is required")
+	// Atlassian validation
+	if cfg.Atlassian.Email == "" {
+		return errors.New("atlassian.email is required")
 	}
-	if cfg.Okta.ClientID == "" {
-		return errors.New("okta.client_id is required")
-	}
-	if cfg.Okta.CallbackPort <= 0 || cfg.Okta.CallbackPort > 65535 {
-		return errors.New("okta.callback_port must be 1-65535")
+	if !isValidEmail(cfg.Atlassian.Email) {
+		return errors.New("atlassian.email must be a valid email address")
 	}
 
 	// Projects validation (minimum 1)
@@ -82,13 +76,49 @@ func (l *Loader) validate(cfg *domain.Config) error {
 	if len(cfg.Team) == 0 {
 		return errors.New("at least one team member is required")
 	}
-	for _, m := range cfg.Team {
+
+	aliases := make(map[string]bool)
+	for i, m := range cfg.Team {
 		if err := m.Validate(); err != nil {
 			return fmt.Errorf("team member %s: %w", m.Name, err)
+		}
+
+		if m.Alias != "" {
+			if aliases[m.Alias] {
+				return fmt.Errorf("duplicate alias %q found (team member %s)", m.Alias, m.Name)
+			}
+			aliases[m.Alias] = true
+		}
+
+		// Check for duplicate emails
+		for j := 0; j < i; j++ {
+			if strings.EqualFold(cfg.Team[j].Email, m.Email) {
+				return fmt.Errorf("duplicate email %q (team members %s and %s)",
+					m.Email, cfg.Team[j].Name, m.Name)
+			}
 		}
 	}
 
 	return nil
+}
+
+// isValidEmail performs basic email validation.
+func isValidEmail(email string) bool {
+	if email == "" {
+		return false
+	}
+	parts := strings.Split(email, "@")
+	if len(parts) != 2 {
+		return false
+	}
+	local, domain := parts[0], parts[1]
+	if local == "" || domain == "" {
+		return false
+	}
+	if !strings.Contains(domain, ".") && len(domain) < 2 {
+		return false
+	}
+	return true
 }
 
 // GetProjects returns configured projects.
@@ -105,20 +135,6 @@ func (l *Loader) GetTeamMembers() []domain.TeamMember {
 		return nil
 	}
 	return l.config.Team
-}
-
-// ValidateUserAccess checks if email is in team list.
-func (l *Loader) ValidateUserAccess(email string) error {
-	if l.config == nil {
-		return errors.New("config not loaded")
-	}
-
-	for _, m := range l.config.Team {
-		if strings.EqualFold(m.Email, email) {
-			return nil
-		}
-	}
-	return fmt.Errorf("user %s is not a member of the configured team", email)
 }
 
 // Ensure Loader implements domain.ConfigPort.

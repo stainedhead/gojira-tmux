@@ -11,8 +11,6 @@ type Screen int
 const (
 	// ScreenSetup is the first-time API token setup screen.
 	ScreenSetup Screen = iota
-	// ScreenLogin is the Okta SSO login screen.
-	ScreenLogin
 	// ScreenMain is the main ticket list view.
 	ScreenMain
 )
@@ -28,15 +26,14 @@ type App struct {
 	user   *domain.User
 
 	// Dependencies (to be injected)
-	tokenStore   domain.TokenStorePort
-	authPort     domain.AuthPort
-	jiraPort     domain.JiraPort
-	configPort   domain.ConfigPort
+	tokenStore domain.TokenStorePort
+	authPort   domain.AuthPort
+	jiraPort   domain.JiraPort
+	configPort domain.ConfigPort
 
 	// Screen models (initialized lazily)
-	setupScreen  tea.Model
-	loginScreen  tea.Model
-	mainScreen   tea.Model
+	setupScreen tea.Model
+	mainScreen  tea.Model
 
 	// Error state
 	err error
@@ -94,8 +91,8 @@ func (a *App) checkInitialState() tea.Cmd {
 	return func() tea.Msg {
 		// Check if we have a stored Jira token
 		if a.tokenStore != nil && a.tokenStore.HasJiraToken() {
-			// Token exists, go to login screen
-			return screenChangeMsg{screen: ScreenLogin}
+			// Token exists, go directly to main screen
+			return screenChangeMsg{screen: ScreenMain}
 		}
 		// No token, show setup screen
 		return screenChangeMsg{screen: ScreenSetup}
@@ -126,21 +123,13 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.initCurrentScreen()
 
 	case TokenStoredMsg:
-		a.screen = ScreenLogin
-		return a, a.initCurrentScreen()
-
-	case AuthSuccessMsg:
-		a.user = msg.User
+		// Token validated and saved, go to main screen
 		a.screen = ScreenMain
 		return a, a.initCurrentScreen()
 
-	case AuthCancelledMsg:
-		// Stay on login screen
-		return a, nil
-
-	case SessionExpiredMsg, LogoutMsg:
+	case LogoutMsg:
 		a.user = nil
-		a.screen = ScreenLogin
+		a.screen = ScreenSetup
 		return a, a.initCurrentScreen()
 
 	case ErrorMsg:
@@ -157,14 +146,9 @@ func (a *App) initCurrentScreen() tea.Cmd {
 	switch a.screen {
 	case ScreenSetup:
 		if a.setupScreen == nil {
-			a.setupScreen = NewSetupScreen(a.tokenStore)
+			a.setupScreen = NewSetupScreenModel(a.tokenStore, a.authPort)
 		}
 		return a.setupScreen.Init()
-	case ScreenLogin:
-		if a.loginScreen == nil {
-			a.loginScreen = NewLoginScreen(a.authPort, a.configPort)
-		}
-		return a.loginScreen.Init()
 	case ScreenMain:
 		if a.mainScreen == nil {
 			a.mainScreen = NewMainScreen(a.jiraPort, a.configPort, a.user)
@@ -182,10 +166,6 @@ func (a *App) updateCurrentScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ScreenSetup:
 		if a.setupScreen != nil {
 			a.setupScreen, cmd = a.setupScreen.Update(msg)
-		}
-	case ScreenLogin:
-		if a.loginScreen != nil {
-			a.loginScreen, cmd = a.loginScreen.Update(msg)
 		}
 	case ScreenMain:
 		if a.mainScreen != nil {
@@ -208,11 +188,6 @@ func (a *App) View() string {
 			return a.setupScreen.View()
 		}
 		return "Loading setup..."
-	case ScreenLogin:
-		if a.loginScreen != nil {
-			return a.loginScreen.View()
-		}
-		return "Loading login..."
 	case ScreenMain:
 		if a.mainScreen != nil {
 			return a.mainScreen.View()
@@ -221,16 +196,6 @@ func (a *App) View() string {
 	}
 
 	return "Unknown screen"
-}
-
-// NewSetupScreen creates a new setup screen.
-func NewSetupScreen(tokenStore domain.TokenStorePort) tea.Model {
-	return NewSetupScreenModel(tokenStore)
-}
-
-// NewLoginScreen creates a new login screen.
-func NewLoginScreen(authPort domain.AuthPort, configPort domain.ConfigPort) tea.Model {
-	return NewLoginScreenModel(authPort, configPort)
 }
 
 // NewMainScreen creates a new main screen.
@@ -252,6 +217,6 @@ func (p *placeholderScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (p *placeholderScreen) View() string {
-	return Styles.Title.Render(p.name + " Screen") + "\n\n" +
+	return Styles.Title.Render(p.name+" Screen") + "\n\n" +
 		Styles.Muted.Render("(Not yet implemented)")
 }

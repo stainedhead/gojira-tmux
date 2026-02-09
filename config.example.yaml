@@ -1,0 +1,25 @@
+# gojira-tmux configuration
+# Copy this file to config.yaml and update with your values.
+
+jira:
+  url: "https://your-company.atlassian.net"
+
+atlassian:
+  email: "your-email@company.com"
+
+projects:
+  - key: "PROJ"
+    name: "My Project"
+  - key: "TEAM"
+    name: "Team Project"
+
+team:
+  - name: "John Anderson"
+    email: "john.anderson@company.com"
+    alias: "JohnA"  # optional: short alias for quick filtering
+  - name: "John Flanagan"
+    email: "john.flanagan@company.com"
+    alias: "JohnF"
+  - name: "Jane Smith"
+    email: "jane.smith@company.com"
+    # alias is optional - members without aliases are matched by name

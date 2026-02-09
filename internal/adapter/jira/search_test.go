@@ -130,6 +130,59 @@ func TestJQLBuilder_Build(t *testing.T) {
 			team: []domain.TeamMember{},
 			want: `project IN ("PROJ") ORDER BY updated DESC`,
 		},
+		{
+			name: "assignee filter by alias",
+			filter: domain.IssueFilter{
+				Assignee: "JohnA",
+			},
+			projects: []domain.Project{
+				{Key: "PROJ", Name: "Project"},
+			},
+			team: []domain.TeamMember{
+				{Name: "John Anderson", Email: "john.anderson@example.com", Alias: "JohnA"},
+				{Name: "John Flanagan", Email: "john.flanagan@example.com", Alias: "JohnF"},
+			},
+			want: `project IN ("PROJ") AND assignee = "john.anderson@example.com" ORDER BY updated DESC`,
+		},
+		{
+			name: "assignee filter by case-insensitive alias",
+			filter: domain.IssueFilter{
+				Assignee: "johna",
+			},
+			projects: []domain.Project{
+				{Key: "PROJ", Name: "Project"},
+			},
+			team: []domain.TeamMember{
+				{Name: "John Anderson", Email: "john.anderson@example.com", Alias: "JohnA"},
+			},
+			want: `project IN ("PROJ") AND assignee = "john.anderson@example.com" ORDER BY updated DESC`,
+		},
+		{
+			name: "assignee filter backward compat - no alias member",
+			filter: domain.IssueFilter{
+				Assignee: "Jane Smith",
+			},
+			projects: []domain.Project{
+				{Key: "PROJ", Name: "Project"},
+			},
+			team: []domain.TeamMember{
+				{Name: "Jane Smith", Email: "jane@example.com"},
+			},
+			want: `project IN ("PROJ") AND assignee = "jane@example.com" ORDER BY updated DESC`,
+		},
+		{
+			name: "assignee filter no match returns empty",
+			filter: domain.IssueFilter{
+				Assignee: "Unknown Person",
+			},
+			projects: []domain.Project{
+				{Key: "PROJ", Name: "Project"},
+			},
+			team: []domain.TeamMember{
+				{Name: "John Doe", Email: "john@example.com"},
+			},
+			want: `project IN ("PROJ") ORDER BY updated DESC`,
+		},
 	}
 
 	for _, tt := range tests {

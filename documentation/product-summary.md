@@ -24,8 +24,7 @@ mindmap
       Comments history
       Attention indicators
     Authentication
-      Okta SSO integration
-      Jira API tokens
+      Atlassian API tokens
       Secure credential storage
     Terminal Native
       BubbleTea TUI
@@ -36,7 +35,7 @@ mindmap
 ### Team-Based Ticket Filtering
 
 Filter Jira tickets by:
-- **Team member**: Select by name, filter by email
+- **Team member**: Select by name or alias, filter by email
 - **Project**: Choose from configured projects
 - **Status**: All, Open, Ready, In Test, Done
 
@@ -46,10 +45,11 @@ Visual flags for tickets requiring attention:
 - **Red dot**: Open issue with no owner comment in 14+ days
 - **Yellow dot**: Open issue with no due date set
 
-### Dual Authentication
+### Atlassian API Token Authentication
 
-- **User identity**: Okta OIDC for corporate SSO
-- **API access**: Jira API tokens for REST calls
+- **API access**: Atlassian API tokens for REST calls (Basic Auth)
+- **Token validation**: Verified against `/rest/api/2/myself` endpoint
+- **Secure storage**: Tokens stored in OS keychain
 
 ## Technology Stack
 
@@ -58,7 +58,7 @@ Visual flags for tickets requiring attention:
 | Language | Go (latest stable) |
 | TUI Framework | BubbleTea |
 | Jira Client | go-jira |
-| Auth | Okta OIDC + Jira API tokens |
+| Auth | Atlassian API tokens (Basic Auth) |
 | Distribution | GitHub Packages |
 
 ## Related Documentation

@@ -2,72 +2,58 @@ package usecase
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/stainedhead/gojira-tmux/internal/domain"
 )
 
-// Authenticate handles the authentication flow.
+// Authenticate handles the authentication flow using Atlassian API tokens.
 type Authenticate struct {
 	authPort   domain.AuthPort
-	configPort domain.ConfigPort
+	tokenStore domain.TokenStorePort
 }
 
 // NewAuthenticate creates a new Authenticate use case.
-func NewAuthenticate(authPort domain.AuthPort, configPort domain.ConfigPort) *Authenticate {
+func NewAuthenticate(authPort domain.AuthPort, tokenStore domain.TokenStorePort) *Authenticate {
 	return &Authenticate{
 		authPort:   authPort,
-		configPort: configPort,
+		tokenStore: tokenStore,
 	}
 }
 
-// StartLogin initiates the login flow.
-// Returns the auth URL to open in the browser.
-func (a *Authenticate) StartLogin(ctx context.Context) (string, error) {
-	return a.authPort.StartAuthFlow(ctx)
-}
+// ValidateAndSaveToken validates credentials against the Jira API and saves the token.
+func (a *Authenticate) ValidateAndSaveToken(ctx context.Context, email, token string) error {
+	email = strings.TrimSpace(email)
+	token = strings.TrimSpace(token)
 
-// CompleteLogin waits for and processes the OAuth callback.
-// Returns the authenticated user after validating team membership.
-func (a *Authenticate) CompleteLogin(ctx context.Context) (*domain.User, error) {
-	// Wait for callback to complete
-	user, err := a.authPort.WaitForCallback(ctx)
+	if email == "" || token == "" {
+		return errors.New("email and token are required")
+	}
+
+	validatedEmail, err := a.authPort.ValidateToken(ctx, email, token)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("token validation failed: %w", err)
 	}
 
-	// Validate team membership
-	if err := a.configPort.ValidateUserAccess(user.Email); err != nil {
-		// User authenticated but not in team
-		_ = a.authPort.Logout()
-		return nil, err
+	if !strings.EqualFold(validatedEmail, email) {
+		return fmt.Errorf("token email mismatch: expected %s, got %s", email, validatedEmail)
 	}
 
-	return user, nil
+	if err := a.tokenStore.SetJiraToken(token); err != nil {
+		return fmt.Errorf("failed to save token: %w", err)
+	}
+
+	return nil
 }
 
-// CancelLogin cancels an in-progress login.
-func (a *Authenticate) CancelLogin() {
-	a.authPort.CancelAuthFlow()
+// HasValidToken checks if a valid token exists.
+func (a *Authenticate) HasValidToken(ctx context.Context) bool {
+	return a.authPort.IsTokenValid(ctx)
 }
 
-// CheckSession checks if user has a valid session.
-// Returns the user if session is valid, nil otherwise.
-func (a *Authenticate) CheckSession(ctx context.Context) (*domain.User, error) {
-	if !a.authPort.IsSessionValid() {
-		return nil, nil
-	}
-
-	// Try to refresh the session
-	user, err := a.authPort.RefreshSession(ctx)
-	if err != nil {
-		// Refresh failed, session is invalid
-		return nil, nil
-	}
-
-	return user, nil
-}
-
-// Logout logs out the current user.
-func (a *Authenticate) Logout() error {
-	return a.authPort.Logout()
+// ClearToken removes the stored token.
+func (a *Authenticate) ClearToken() error {
+	return a.tokenStore.DeleteJiraToken()
 }

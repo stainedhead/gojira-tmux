@@ -55,9 +55,8 @@ internal/
 
   adapter/
     auth/
-      okta.go               # Okta OIDC implementation
+      atlassian.go          # Atlassian API token validation
       token_store.go        # Keyring storage
-      callback.go           # OAuth callback server
     config/
       config.go             # YAML loading
       types.go              # Config structs
@@ -68,8 +67,7 @@ internal/
   infrastructure/
     tui/
       app.go                # Root BubbleTea model
-      setup_screen.go       # Token setup UI
-      login_screen.go       # Okta login UI
+      setup_screen.go       # Email + API token setup UI
       main_screen.go        # Main ticket view
       filter_bar.go         # Filter dropdowns
       tickets_table.go      # Issue list table
@@ -84,50 +82,34 @@ pkg/                        # Public reusable packages
 
 ## Authentication Architecture
 
-### Dual Authentication Flow
+### Atlassian API Token Authentication
 
 ```mermaid
 sequenceDiagram
     participant TUI as gojira TUI
-    participant Browser
-    participant Okta
     participant Keyring as OS Keyring
     participant Jira as Jira API
 
     TUI->>Keyring: Check for API token
     alt No token
-        TUI->>TUI: Show setup screen
+        TUI->>TUI: Show setup screen (email + token input)
+        TUI->>Jira: GET /rest/api/2/myself (validate token)
+        Jira->>TUI: 200 OK (email confirmed)
         TUI->>Keyring: Store API token
     end
 
-    TUI->>Browser: Open Okta auth URL
-    Browser->>Okta: OIDC auth request
-    Okta->>Browser: Login page (SSO/MFA)
-    Browser->>Okta: User credentials
-    Okta->>TUI: Redirect with auth code
-    TUI->>Okta: Exchange code for tokens
-    Okta->>TUI: ID token + user info
-
-    TUI->>TUI: Validate user email in team list
     TUI->>Keyring: Load Jira API token
     TUI->>Jira: API calls (Basic Auth)
     Jira->>TUI: Issue data
 ```
 
-### Okta OIDC Configuration
-
-| Parameter | Value |
-|-----------|-------|
-| Protocol | OpenID Connect |
-| Flow | Authorization Code + PKCE |
-| Scopes | `openid`, `profile`, `email` |
-| Callback | `http://localhost:{port}/callback` |
-
 ### Jira API Authentication
 
 ```
-Authorization: Basic base64(username:api_token)
+Authorization: Basic base64(email:api_token)
 ```
+
+Token validation is performed against `/rest/api/2/myself` which returns the authenticated user's email, confirming the token is valid.
 
 ### Secure Storage
 
@@ -139,7 +121,6 @@ Authorization: Basic base64(username:api_token)
 
 **Stored Keys:**
 - `gojira-jira-token` - Jira API token
-- `gojira-okta-refresh` - Okta refresh token (optional)
 
 ## Jira API Integration
 
@@ -147,6 +128,7 @@ Authorization: Basic base64(username:api_token)
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
+| `/rest/api/2/myself` | GET | Token validation |
 | `/rest/api/2/search` | GET | JQL queries |
 | `/rest/api/2/project` | GET | List projects |
 | `/rest/api/2/issue/{key}` | GET | Issue details |
@@ -192,13 +174,10 @@ assignee = "{email}" AND project = "{key}" AND status = "{status}" ORDER BY upda
 graph TD
     App[App Model]
     App --> Setup[SetupScreen]
-    App --> Login[LoginScreen]
     App --> Main[MainScreen]
 
+    Setup --> EmailInput[EmailInput]
     Setup --> TokenInput[TokenInput]
-
-    Login --> StatusDisplay[StatusDisplay]
-    Login --> OktaButton[OktaLoginButton]
 
     Main --> FilterBar[FilterBar]
     Main --> TicketsTable[TicketsTable]
@@ -271,8 +250,11 @@ type Issue struct {
 type TeamMember struct {
     Name  string
     Email string
+    Alias string // optional short alias for filtering
 }
 ```
+
+Team members support an optional `Alias` field for disambiguation. The `MatchesIdentifier()` method resolves identifiers with 4-priority matching: exact alias, exact name, case-insensitive alias, case-insensitive name. `DisplayName()` returns "Name (Alias)" when an alias is set.
 
 ### Comment
 
@@ -293,7 +275,6 @@ type Comment struct {
 | `charmbracelet/lipgloss` | Styling |
 | `charmbracelet/bubbles` | UI components |
 | `andygrunwald/go-jira` | Jira REST client |
-| `coreos/go-oidc` | Okta OIDC |
 | `zalando/go-keyring` | Secure storage |
 | `gopkg.in/yaml.v3` | Config parsing |
 

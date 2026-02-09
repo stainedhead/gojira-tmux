@@ -63,25 +63,25 @@ func (b *JQLBuilder) buildProjectCondition(projectKey string) string {
 }
 
 // buildAssigneeCondition builds the assignee filter condition.
-func (b *JQLBuilder) buildAssigneeCondition(assigneeName string) string {
-	if assigneeName == "" || assigneeName == "-All-" {
+func (b *JQLBuilder) buildAssigneeCondition(identifier string) string {
+	if identifier == "" || identifier == "-All-" {
 		return ""
 	}
 
-	// Find email for the given name
-	var email string
-	for _, m := range b.team {
-		if m.Name == assigneeName {
-			email = m.Email
+	// Find team member by name or alias
+	var member *domain.TeamMember
+	for i := range b.team {
+		if b.team[i].MatchesIdentifier(identifier) {
+			member = &b.team[i]
 			break
 		}
 	}
 
-	if email == "" {
+	if member == nil {
 		return ""
 	}
 
-	return fmt.Sprintf(`assignee = %s`, escapeJQL(email))
+	return fmt.Sprintf(`assignee = %s`, escapeJQL(member.Email))
 }
 
 // buildStatusCondition builds the status filter condition.

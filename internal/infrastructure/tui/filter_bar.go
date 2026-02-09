@@ -40,10 +40,10 @@ type FilterBar struct {
 
 // NewFilterBar creates a new filter bar.
 func NewFilterBar(team []domain.TeamMember, projects []domain.Project) *FilterBar {
-	// Build member options
+	// Build member options using DisplayName for alias support
 	members := []string{"-All-"}
 	for _, m := range team {
-		members = append(members, m.Name)
+		members = append(members, m.DisplayName())
 	}
 
 	// Build project options

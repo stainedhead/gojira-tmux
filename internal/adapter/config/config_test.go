@@ -10,31 +10,20 @@ import (
 
 func TestLoader_Load(t *testing.T) {
 	tests := []struct {
-		name       string
+		name        string
 		yamlContent string
-		wantErr    bool
+		wantErr     bool
 		errContains string
-		validate   func(*testing.T, *config.Config)
+		validate    func(*testing.T, *config.Config)
 	}{
 		{
 			name: "valid config",
 			yamlContent: `
 jira:
   url: "https://example.atlassian.net"
-  username: "user@example.com"
-  custom_fields:
-    sprint: "customfield_10020"
-    epic: "customfield_10014"
-    story_points: "customfield_10016"
 
-okta:
-  issuer: "https://example.okta.com/oauth2/default"
-  client_id: "0oaexample"
-  callback_port: 8080
-  scopes:
-    - "openid"
-    - "profile"
-    - "email"
+atlassian:
+  email: "user@example.com"
 
 projects:
   - key: "PROJ"
@@ -49,17 +38,8 @@ team:
 				if cfg.Jira.URL != "https://example.atlassian.net" {
 					t.Errorf("Jira.URL = %q, want %q", cfg.Jira.URL, "https://example.atlassian.net")
 				}
-				if cfg.Jira.Username != "user@example.com" {
-					t.Errorf("Jira.Username = %q, want %q", cfg.Jira.Username, "user@example.com")
-				}
-				if cfg.Okta.Issuer != "https://example.okta.com/oauth2/default" {
-					t.Errorf("Okta.Issuer = %q, want correct value", cfg.Okta.Issuer)
-				}
-				if cfg.Okta.ClientID != "0oaexample" {
-					t.Errorf("Okta.ClientID = %q, want %q", cfg.Okta.ClientID, "0oaexample")
-				}
-				if cfg.Okta.CallbackPort != 8080 {
-					t.Errorf("Okta.CallbackPort = %d, want %d", cfg.Okta.CallbackPort, 8080)
+				if cfg.Atlassian.Email != "user@example.com" {
+					t.Errorf("Atlassian.Email = %q, want %q", cfg.Atlassian.Email, "user@example.com")
 				}
 				if len(cfg.Projects) != 1 {
 					t.Errorf("len(Projects) = %d, want %d", len(cfg.Projects), 1)
@@ -70,15 +50,67 @@ team:
 			},
 		},
 		{
-			name: "missing jira url",
+			name: "valid config with aliases",
 			yamlContent: `
 jira:
-  username: "user@example.com"
+  url: "https://example.atlassian.net"
 
-okta:
-  issuer: "https://example.okta.com/oauth2/default"
-  client_id: "0oaexample"
-  callback_port: 8080
+atlassian:
+  email: "user@example.com"
+
+projects:
+  - key: "PROJ"
+    name: "My Project"
+
+team:
+  - name: "John Anderson"
+    email: "john.anderson@example.com"
+    alias: "JohnA"
+  - name: "John Flanagan"
+    email: "john.flanagan@example.com"
+    alias: "JohnF"
+`,
+			wantErr: false,
+			validate: func(t *testing.T, cfg *config.Config) {
+				if cfg.Team[0].Alias != "JohnA" {
+					t.Errorf("Team[0].Alias = %q, want %q", cfg.Team[0].Alias, "JohnA")
+				}
+				if cfg.Team[1].Alias != "JohnF" {
+					t.Errorf("Team[1].Alias = %q, want %q", cfg.Team[1].Alias, "JohnF")
+				}
+			},
+		},
+		{
+			name: "backward compatible - no aliases",
+			yamlContent: `
+jira:
+  url: "https://example.atlassian.net"
+
+atlassian:
+  email: "user@example.com"
+
+projects:
+  - key: "PROJ"
+    name: "My Project"
+
+team:
+  - name: "John Doe"
+    email: "john@example.com"
+  - name: "Jane Smith"
+    email: "jane@example.com"
+`,
+			wantErr: false,
+			validate: func(t *testing.T, cfg *config.Config) {
+				if cfg.Team[0].Alias != "" {
+					t.Errorf("Team[0].Alias = %q, want empty", cfg.Team[0].Alias)
+				}
+			},
+		},
+		{
+			name: "missing jira url",
+			yamlContent: `
+atlassian:
+  email: "user@example.com"
 
 projects:
   - key: "PROJ"
@@ -92,38 +124,13 @@ team:
 			errContains: "jira.url is required",
 		},
 		{
-			name: "missing jira username",
-			yamlContent: `
-jira:
-  url: "https://example.atlassian.net"
-
-okta:
-  issuer: "https://example.okta.com/oauth2/default"
-  client_id: "0oaexample"
-  callback_port: 8080
-
-projects:
-  - key: "PROJ"
-    name: "My Project"
-
-team:
-  - name: "John Doe"
-    email: "john@example.com"
-`,
-			wantErr:     true,
-			errContains: "jira.username is required",
-		},
-		{
 			name: "jira url not https",
 			yamlContent: `
 jira:
   url: "http://example.atlassian.net"
-  username: "user@example.com"
 
-okta:
-  issuer: "https://example.okta.com/oauth2/default"
-  client_id: "0oaexample"
-  callback_port: 8080
+atlassian:
+  email: "user@example.com"
 
 projects:
   - key: "PROJ"
@@ -137,15 +144,10 @@ team:
 			errContains: "jira.url must use HTTPS",
 		},
 		{
-			name: "missing okta issuer",
+			name: "missing atlassian email",
 			yamlContent: `
 jira:
   url: "https://example.atlassian.net"
-  username: "user@example.com"
-
-okta:
-  client_id: "0oaexample"
-  callback_port: 8080
 
 projects:
   - key: "PROJ"
@@ -156,18 +158,16 @@ team:
     email: "john@example.com"
 `,
 			wantErr:     true,
-			errContains: "okta.issuer is required",
+			errContains: "atlassian.email is required",
 		},
 		{
-			name: "missing okta client_id",
+			name: "invalid atlassian email",
 			yamlContent: `
 jira:
   url: "https://example.atlassian.net"
-  username: "user@example.com"
 
-okta:
-  issuer: "https://example.okta.com/oauth2/default"
-  callback_port: 8080
+atlassian:
+  email: "not-an-email"
 
 projects:
   - key: "PROJ"
@@ -178,42 +178,16 @@ team:
     email: "john@example.com"
 `,
 			wantErr:     true,
-			errContains: "okta.client_id is required",
-		},
-		{
-			name: "invalid callback port",
-			yamlContent: `
-jira:
-  url: "https://example.atlassian.net"
-  username: "user@example.com"
-
-okta:
-  issuer: "https://example.okta.com/oauth2/default"
-  client_id: "0oaexample"
-  callback_port: 0
-
-projects:
-  - key: "PROJ"
-    name: "My Project"
-
-team:
-  - name: "John Doe"
-    email: "john@example.com"
-`,
-			wantErr:     true,
-			errContains: "okta.callback_port must be 1-65535",
+			errContains: "atlassian.email must be a valid email address",
 		},
 		{
 			name: "no projects",
 			yamlContent: `
 jira:
   url: "https://example.atlassian.net"
-  username: "user@example.com"
 
-okta:
-  issuer: "https://example.okta.com/oauth2/default"
-  client_id: "0oaexample"
-  callback_port: 8080
+atlassian:
+  email: "user@example.com"
 
 projects: []
 
@@ -229,12 +203,9 @@ team:
 			yamlContent: `
 jira:
   url: "https://example.atlassian.net"
-  username: "user@example.com"
 
-okta:
-  issuer: "https://example.okta.com/oauth2/default"
-  client_id: "0oaexample"
-  callback_port: 8080
+atlassian:
+  email: "user@example.com"
 
 projects:
   - key: "PROJ"
@@ -250,12 +221,9 @@ team: []
 			yamlContent: `
 jira:
   url: "https://example.atlassian.net"
-  username: "user@example.com"
 
-okta:
-  issuer: "https://example.okta.com/oauth2/default"
-  client_id: "0oaexample"
-  callback_port: 8080
+atlassian:
+  email: "user@example.com"
 
 projects:
   - key: "proj123"
@@ -273,12 +241,9 @@ team:
 			yamlContent: `
 jira:
   url: "https://example.atlassian.net"
-  username: "user@example.com"
 
-okta:
-  issuer: "https://example.okta.com/oauth2/default"
-  client_id: "0oaexample"
-  callback_port: 8080
+atlassian:
+  email: "user@example.com"
 
 projects:
   - key: "PROJ"
@@ -291,11 +256,77 @@ team:
 			wantErr:     true,
 			errContains: "team member email is invalid",
 		},
+		{
+			name: "duplicate alias",
+			yamlContent: `
+jira:
+  url: "https://example.atlassian.net"
+
+atlassian:
+  email: "user@example.com"
+
+projects:
+  - key: "PROJ"
+    name: "My Project"
+
+team:
+  - name: "John Anderson"
+    email: "john.a@example.com"
+    alias: "JohnA"
+  - name: "John Adams"
+    email: "john.ad@example.com"
+    alias: "JohnA"
+`,
+			wantErr:     true,
+			errContains: "duplicate alias",
+		},
+		{
+			name: "invalid alias format",
+			yamlContent: `
+jira:
+  url: "https://example.atlassian.net"
+
+atlassian:
+  email: "user@example.com"
+
+projects:
+  - key: "PROJ"
+    name: "My Project"
+
+team:
+  - name: "John Doe"
+    email: "john@example.com"
+    alias: "John D"
+`,
+			wantErr:     true,
+			errContains: "team member alias must be alphanumeric",
+		},
+		{
+			name: "duplicate email",
+			yamlContent: `
+jira:
+  url: "https://example.atlassian.net"
+
+atlassian:
+  email: "user@example.com"
+
+projects:
+  - key: "PROJ"
+    name: "My Project"
+
+team:
+  - name: "John Doe"
+    email: "john@example.com"
+  - name: "John D"
+    email: "john@example.com"
+`,
+			wantErr:     true,
+			errContains: "duplicate email",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create temp file with YAML content
 			tmpDir := t.TempDir()
 			configPath := filepath.Join(tmpDir, "config.yaml")
 			err := os.WriteFile(configPath, []byte(tt.yamlContent), 0600)
@@ -303,7 +334,6 @@ team:
 				t.Fatalf("failed to write temp config: %v", err)
 			}
 
-			// Create loader and load config
 			loader := config.NewLoader(configPath)
 			cfg, err := loader.Load()
 
@@ -342,12 +372,9 @@ func TestLoader_GetProjects(t *testing.T) {
 	yamlContent := `
 jira:
   url: "https://example.atlassian.net"
-  username: "user@example.com"
 
-okta:
-  issuer: "https://example.okta.com/oauth2/default"
-  client_id: "0oaexample"
-  callback_port: 8080
+atlassian:
+  email: "user@example.com"
 
 projects:
   - key: "PROJ"
@@ -382,12 +409,9 @@ func TestLoader_GetTeamMembers(t *testing.T) {
 	yamlContent := `
 jira:
   url: "https://example.atlassian.net"
-  username: "user@example.com"
 
-okta:
-  issuer: "https://example.okta.com/oauth2/default"
-  client_id: "0oaexample"
-  callback_port: 8080
+atlassian:
+  email: "user@example.com"
 
 projects:
   - key: "PROJ"
@@ -415,70 +439,6 @@ team:
 	team := loader.GetTeamMembers()
 	if len(team) != 2 {
 		t.Errorf("GetTeamMembers() returned %d members, want 2", len(team))
-	}
-}
-
-func TestLoader_ValidateUserAccess(t *testing.T) {
-	yamlContent := `
-jira:
-  url: "https://example.atlassian.net"
-  username: "user@example.com"
-
-okta:
-  issuer: "https://example.okta.com/oauth2/default"
-  client_id: "0oaexample"
-  callback_port: 8080
-
-projects:
-  - key: "PROJ"
-    name: "Project One"
-
-team:
-  - name: "John Doe"
-    email: "john@example.com"
-`
-	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "config.yaml")
-	err := os.WriteFile(configPath, []byte(yamlContent), 0600)
-	if err != nil {
-		t.Fatalf("failed to write temp config: %v", err)
-	}
-
-	loader := config.NewLoader(configPath)
-	_, err = loader.Load()
-	if err != nil {
-		t.Fatalf("Load() unexpected error: %v", err)
-	}
-
-	tests := []struct {
-		name    string
-		email   string
-		wantErr bool
-	}{
-		{
-			name:    "valid user",
-			email:   "john@example.com",
-			wantErr: false,
-		},
-		{
-			name:    "valid user case insensitive",
-			email:   "JOHN@EXAMPLE.COM",
-			wantErr: false,
-		},
-		{
-			name:    "invalid user",
-			email:   "stranger@example.com",
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := loader.ValidateUserAccess(tt.email)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ValidateUserAccess() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
 	}
 }
 

@@ -33,27 +33,12 @@ type JiraPort interface {
 
 // AuthPort defines the interface for authentication operations.
 type AuthPort interface {
-	// StartAuthFlow initiates the Okta OIDC flow.
-	// Returns the authorization URL to open in browser.
-	StartAuthFlow(ctx context.Context) (authURL string, err error)
+	// ValidateToken validates an Atlassian API token by calling the Jira API.
+	// Returns the validated email address on success.
+	ValidateToken(ctx context.Context, email, token string) (string, error)
 
-	// WaitForCallback waits for the OAuth callback.
-	// Returns the user info after successful authentication.
-	// ctx should have timeout set (e.g., 5 minutes).
-	WaitForCallback(ctx context.Context) (*User, error)
-
-	// CancelAuthFlow cancels an in-progress authentication.
-	CancelAuthFlow()
-
-	// RefreshSession refreshes the user session if refresh token exists.
-	// Returns error if refresh fails or no refresh token.
-	RefreshSession(ctx context.Context) (*User, error)
-
-	// IsSessionValid checks if current session is still valid.
-	IsSessionValid() bool
-
-	// Logout clears the current session.
-	Logout() error
+	// IsTokenValid checks if a valid token exists in the store.
+	IsTokenValid(ctx context.Context) bool
 }
 
 // TokenStorePort defines the interface for secure credential storage.
@@ -67,15 +52,6 @@ type TokenStorePort interface {
 
 	// DeleteJiraToken removes the stored Jira API token.
 	DeleteJiraToken() error
-
-	// GetRefreshToken retrieves the stored Okta refresh token.
-	GetRefreshToken() (string, error)
-
-	// SetRefreshToken stores the Okta refresh token.
-	SetRefreshToken(token string) error
-
-	// DeleteRefreshToken removes the stored refresh token.
-	DeleteRefreshToken() error
 
 	// HasJiraToken returns true if a Jira token exists.
 	HasJiraToken() bool
@@ -92,16 +68,14 @@ type ConfigPort interface {
 	// GetTeamMembers returns configured team members.
 	GetTeamMembers() []TeamMember
 
-	// ValidateUserAccess checks if email is in team list.
-	ValidateUserAccess(email string) error
 }
 
 // Config represents the application configuration.
 type Config struct {
-	Jira     JiraConfig     `yaml:"jira"`
-	Okta     OktaConfig     `yaml:"okta"`
-	Projects []Project      `yaml:"projects"`
-	Team     []TeamMember   `yaml:"team"`
+	Jira      JiraConfig      `yaml:"jira"`
+	Atlassian AtlassianConfig `yaml:"atlassian"`
+	Projects  []Project       `yaml:"projects"`
+	Team      []TeamMember    `yaml:"team"`
 }
 
 // JiraConfig holds Jira-specific configuration.
@@ -118,10 +92,7 @@ type CustomFieldConfig struct {
 	StoryPoints string `yaml:"story_points,omitempty"`
 }
 
-// OktaConfig holds Okta-specific configuration.
-type OktaConfig struct {
-	Issuer       string   `yaml:"issuer"`
-	ClientID     string   `yaml:"client_id"`
-	CallbackPort int      `yaml:"callback_port"`
-	Scopes       []string `yaml:"scopes"`
+// AtlassianConfig holds Atlassian-specific configuration.
+type AtlassianConfig struct {
+	Email string `yaml:"email"`
 }

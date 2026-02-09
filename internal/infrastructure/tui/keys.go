@@ -92,27 +92,3 @@ func DefaultSetupKeyMap() SetupKeyMap {
 	}
 }
 
-// LoginKeyMap defines key bindings for the login screen.
-type LoginKeyMap struct {
-	Login  key.Binding
-	Cancel key.Binding
-	Quit   key.Binding
-}
-
-// DefaultLoginKeyMap returns the default login screen key bindings.
-func DefaultLoginKeyMap() LoginKeyMap {
-	return LoginKeyMap{
-		Login: key.NewBinding(
-			key.WithKeys("enter"),
-			key.WithHelp("enter", "login with Okta"),
-		),
-		Cancel: key.NewBinding(
-			key.WithKeys("esc"),
-			key.WithHelp("esc", "cancel"),
-		),
-		Quit: key.NewBinding(
-			key.WithKeys("q", "ctrl+c"),
-			key.WithHelp("q", "quit"),
-		),
-	}
-}
