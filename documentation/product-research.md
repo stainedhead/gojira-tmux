@@ -37,36 +37,28 @@ The go-jira library provides a Go client for the Atlassian Jira REST API with th
 **Key API Endpoints**:
 | Endpoint | Purpose |
 |----------|---------|
-| `GET /rest/api/2/search` | JQL queries filtered by assignee email |
-| `GET /rest/api/2/project` | List and validate projects |
-| `GET /rest/api/2/issue/{issueKey}` | Retrieve issue details |
+| `GET /rest/api/3/search/jql` | JQL queries filtered by assignee email (cursor-based pagination) |
+| `GET /rest/api/3/issue/{issueKey}` | Retrieve issue details (ADF format descriptions) |
+| `GET /rest/api/3/myself` | Token validation |
 
 ### Configuration Management
 
 **Format**: YAML
 **Package**: gopkg.in/yaml.v3
 
-Configuration file stores all non-sensitive settings. Sensitive credentials (Okta client secret, Jira API token) stored via environment variables and OS-native secure storage.
+Configuration file stores all non-sensitive settings. The Jira API token is stored via environment variable or OS-native secure storage (keyring).
 
 ## Configuration Structure
 
 ```yaml
 # config.yaml
 
-jira:
+atlassian:
   url: "https://company.atlassian.net"
-  username: "service-account@company.com"
-  # API token via JIRA_API_TOKEN env var or secure storage
-
-okta:
-  issuer: "https://company.okta.com/oauth2/default"
-  client_id: "YOUR_OKTA_CLIENT_ID"
-  # client_secret via OKTA_CLIENT_SECRET env var
-  callback_port: 8080
-  scopes:
-    - "openid"
-    - "profile"
-    - "email"
+  email: "your-email@company.com"
+  custom_fields:  # optional
+    sprint: "customfield_10020"
+    epic: "customfield_10014"
 
 projects:
   - key: "PROJ1"
@@ -78,6 +70,7 @@ projects:
 team:
   - name: "John Doe"
     email: "john.doe@company.com"
+    alias: "JohnD"  # optional short alias
   - name: "Jane Smith"
     email: "jane.smith@company.com"
   - name: "Bob Wilson"
@@ -88,23 +81,20 @@ team:
 
 | Section | Field | Description |
 |---------|-------|-------------|
-| `jira.url` | string | Jira instance base URL |
-| `jira.username` | string | Jira service account username/email |
-| `okta.issuer` | string | Okta authorization server URL |
-| `okta.client_id` | string | Okta OAuth application client ID |
-| `okta.callback_port` | int | Local port for OAuth callback (default: 8080) |
-| `okta.scopes` | []string | OIDC scopes for user authentication |
+| `atlassian.url` | string | Jira instance base URL (must be HTTPS) |
+| `atlassian.email` | string | Atlassian account email for API authentication |
+| `atlassian.custom_fields` | object | Optional custom field ID mappings |
 | `projects[].key` | string | Jira project key (e.g., "PROJ") |
 | `projects[].name` | string | Display name for TUI |
 | `team[].name` | string | Team member display name (used in TUI selection) |
 | `team[].email` | string | Email for Jira assignee filtering |
+| `team[].alias` | string | Optional short alias for quick filtering |
 
 ### Environment Variables
 
 | Variable | Description |
 |----------|-------------|
 | `JIRA_API_TOKEN` | Jira API token for REST API authentication |
-| `OKTA_CLIENT_SECRET` | Okta OAuth client secret (required for OIDC flow) |
 
 ## Architecture Mapping
 
@@ -121,9 +111,8 @@ internal/
 
   adapter/
     auth/
-      okta.go         # Okta OIDC flow implementation
+      atlassian.go    # Atlassian API token validation
       token_store.go  # Secure credential storage (keyring)
-      callback.go     # Local HTTP server for OAuth callback
     config/
       config.go       # YAML config loading
       types.go        # Config struct definitions
@@ -134,188 +123,67 @@ internal/
 
 ## Authentication
 
-### Dual Authentication Architecture
+### Atlassian API Token Authentication
 
-gojira-tmux uses a dual authentication approach:
+gojira-tmux uses Atlassian API token authentication with HTTP Basic Auth:
 
-1. **User Authentication**: OAuth 2.0/OIDC via Okta to verify user identity
-2. **API Authentication**: Jira API tokens for REST API access
-
-This approach avoids registering the application with Jira while leveraging enterprise SSO through Okta.
-
-### Why This Approach
-
-| Concern | Solution |
-|---------|----------|
-| No Jira app registration required | Use Jira API tokens instead of Jira OAuth |
-| Enterprise SSO integration | Okta OIDC for user authentication |
-| Secure credential management | API tokens stored in OS keyring |
-| User access control | Okta validates user identity; Jira permissions based on token |
+- **Email**: From `atlassian.email` in config
+- **Password**: API token (generated in Atlassian account settings, stored in OS keyring)
 
 ### Authentication Flow
 
 ```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   gojira    │     │   Browser   │     │    Okta     │     │    Jira     │
-│    TUI      │     │             │     │             │     │    API      │
-└──────┬──────┘     └──────┬──────┘     └──────┬──────┘     └──────┬──────┘
-       │                   │                   │                   │
-       │ 1. Start login    │                   │                   │
-       ├──────────────────>│                   │                   │
-       │   (open browser)  │                   │                   │
-       │                   │ 2. OIDC auth      │                   │
-       │                   ├──────────────────>│                   │
-       │                   │                   │                   │
-       │                   │ 3. User login     │                   │
-       │                   │   (SSO/MFA)       │                   │
-       │                   │<──────────────────┤                   │
-       │                   │                   │                   │
-       │                   │ 4. Redirect +code │                   │
-       │ 5. Callback       │<──────────────────┤                   │
-       │<──────────────────┤                   │                   │
-       │  (localhost:8080) │                   │                   │
-       │                   │                   │                   │
-       │ 6. Exchange code  │                   │                   │
-       ├───────────────────────────────────────>│                   │
-       │                   │                   │                   │
-       │ 7. ID token +     │                   │                   │
-       │    user info      │                   │                   │
-       │<───────────────────────────────────────┤                   │
-       │                   │                   │                   │
-       │ 8. Validate user email against team config                │
-       │                   │                   │                   │
-       │ 9. Load Jira API token from secure storage                │
-       │                   │                   │                   │
-       │ 10. API calls with Basic Auth (username + API token)      │
-       ├───────────────────────────────────────────────────────────>│
-       │                   │                   │                   │
-       │ 11. Jira data     │                   │                   │
-       │<───────────────────────────────────────────────────────────┤
-       │                   │                   │                   │
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   gojira    │     │  OS Keyring │     │    Jira     │
+│    TUI      │     │             │     │   API v3    │
+└──────┬──────┘     └──────┬──────┘     └──────┬──────┘
+       │                   │                   │
+       │ 1. Check keyring  │                   │
+       ├──────────────────>│                   │
+       │                   │                   │
+       │ No token?         │                   │
+       │ Show setup screen │                   │
+       │                   │                   │
+       │ 2. Validate token │                   │
+       ├───────────────────────────────────────>│
+       │   GET /rest/api/3/myself              │
+       │                   │                   │
+       │ 3. 200 OK         │                   │
+       │<───────────────────────────────────────┤
+       │                   │                   │
+       │ 4. Store token    │                   │
+       ├──────────────────>│                   │
+       │                   │                   │
+       │ 5. API calls (Basic Auth)             │
+       ├───────────────────────────────────────>│
+       │                   │                   │
+       │ 6. Jira data      │                   │
+       │<───────────────────────────────────────┤
 ```
-
-### User Authentication (Okta OIDC)
-
-**Purpose**: Verify user identity via corporate SSO
-
-**Go Package**: [coreos/go-oidc](https://github.com/coreos/go-oidc)
-
-| Component | Description |
-|-----------|-------------|
-| Protocol | OpenID Connect (OAuth 2.0 + identity layer) |
-| Flow | Authorization Code Flow with PKCE |
-| Callback | Local HTTP server on configurable port |
-| Validation | ID token signature + claims verification |
-
-**Required OIDC Scopes**:
-| Scope | Purpose |
-|-------|---------|
-| `openid` | Required for OIDC |
-| `profile` | User name information |
-| `email` | User email for team validation |
-
-### API Authentication (Jira API Token)
-
-**Purpose**: Authenticate REST API calls to Jira
-
-Jira API tokens use HTTP Basic Authentication:
-- Username: Jira account email
-- Password: API token (generated in Atlassian account settings)
 
 **Request Header**:
 ```
-Authorization: Basic base64(username:api_token)
+Authorization: Basic base64(email:api_token)
 ```
 
-**Generating Jira API Token**:
+**Generating an API Token**:
 1. Log in to https://id.atlassian.com/manage-profile/security/api-tokens
 2. Click "Create API token"
 3. Name the token (e.g., "gojira-tmux")
 4. Copy and store securely
 
-### Login Screen Layout
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                                                                         │
-│                           ╔═══════════════════╗                         │
-│                           ║    gojira-tmux    ║                         │
-│                           ╚═══════════════════╝                         │
-│                                                                         │
-│                      Jira Team Ticket Viewer                            │
-│                                                                         │
-│         ┌─────────────────────────────────────────────┐                 │
-│         │                                             │                 │
-│         │   Status: Not authenticated                 │                 │
-│         │                                             │                 │
-│         │   Okta:  https://company.okta.com           │                 │
-│         │   Jira:  https://company.atlassian.net      │                 │
-│         │                                             │                 │
-│         └─────────────────────────────────────────────┘                 │
-│                                                                         │
-│                      [ Login with Okta ]                                │
-│                                                                         │
-│         ─────────────────────────────────────────────                   │
-│         Press Enter to open browser for authentication                  │
-│         Press 'q' to quit                                               │
-│                                                                         │
-└─────────────────────────────────────────────────────────────────────────┘
-```
-
-### Awaiting Callback Screen
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                                                                         │
-│                           ╔═══════════════════╗                         │
-│                           ║    gojira-tmux    ║                         │
-│                           ╚═══════════════════╝                         │
-│                                                                         │
-│                      Authenticating via Okta...                         │
-│                                                                         │
-│         ┌─────────────────────────────────────────────┐                 │
-│         │                                             │                 │
-│         │   ◐ Waiting for authentication...           │                 │
-│         │                                             │                 │
-│         │   A browser window has been opened.         │                 │
-│         │   Please complete the Okta login process.   │                 │
-│         │                                             │                 │
-│         │   Listening on: http://localhost:8080       │                 │
-│         │                                             │                 │
-│         └─────────────────────────────────────────────┘                 │
-│                                                                         │
-│         ─────────────────────────────────────────────                   │
-│         Press 'c' to cancel authentication                              │
-│                                                                         │
-└─────────────────────────────────────────────────────────────────────────┘
-```
-
 ### Authentication States
 
 ```
-┌──────────────┐    Login     ┌──────────────┐   Okta OK   ┌──────────────┐
-│    Logged    │   Initiated  │   Awaiting   │  + Jira    │  Authenticated│
-│     Out      ├─────────────>│   Callback   ├────────────>│    (Main UI) │
-└──────────────┘              └───────┬──────┘             └───────┬──────┘
-       ▲                              │                            │
-       │                              │ Timeout/                   │ Session
-       │                              │ Cancel/                    │ Expired
-       │                              │ Invalid User               │
-       │                              ▼                            │
-       │                       ┌──────────────┐                    │
-       │                       │    Error     │                    │
-       │                       │   Display    │                    │
-       └───────────────────────┴──────────────┘<───────────────────┘
+┌──────────────┐   No token   ┌──────────────┐   Token OK   ┌──────────────┐
+│   Startup    ├─────────────>│    Setup     ├─────────────>│  Main Screen │
+│  (check      │              │   Screen     │              │              │
+│   keyring)   │              └──────────────┘              └──────────────┘
+└──────┬───────┘
+       │ Token exists
+       └──────────────────────────────────────────────────>│  Main Screen │
+                                                           └──────────────┘
 ```
-
-### User Validation
-
-After successful Okta authentication:
-1. Extract email from ID token claims
-2. Verify email exists in configured `team` list
-3. If not in team list, display error and deny access
-
-This ensures only configured team members can use the application.
 
 ### Secure Credential Storage
 
@@ -331,7 +199,6 @@ Credentials stored using OS-native secure storage:
 | Key | Value |
 |-----|-------|
 | `gojira-jira-token` | Jira API token |
-| `gojira-okta-refresh` | Okta refresh token (optional, for silent re-auth) |
 
 **Go Package**: [zalando/go-keyring](https://github.com/zalando/go-keyring)
 
@@ -371,10 +238,9 @@ Credentials stored using OS-native secure storage:
 | Concern | Mitigation |
 |---------|------------|
 | API token exposure | Stored in OS keyring, never in config files |
-| Unauthorized access | Okta SSO validates corporate identity |
 | Team access control | Email whitelist in config |
 | Token rotation | Users can regenerate tokens in Atlassian account |
-| Session hijacking | Okta handles session security with MFA support |
+| Token validation | Token verified against `/rest/api/3/myself` on setup |
 
 ## UI Layout Specification
 
@@ -501,10 +367,9 @@ assignee = "john.doe@company.com" AND status != "Done" ORDER BY updated DESC
 ## BubbleTea Component Architecture
 
 ```
-internal/adapter/tui/
+internal/infrastructure/tui/
   app.go              # Main application model (router between screens)
-  setup_screen.go     # First-time Jira API token setup
-  login_screen.go     # Okta login UI
+  setup_screen.go     # First-time email + API token setup
   main_screen.go      # Main tickets view (after auth)
   filter_bar.go       # Project/Member/Status dropdowns
   tickets_table.go    # Main tickets list table
@@ -519,10 +384,8 @@ internal/adapter/tui/
 ```
 App (root model)
 ├── SetupScreen (first-time only)
+│   ├── EmailInput
 │   └── TokenInput
-├── LoginScreen
-│   ├── StatusDisplay
-│   └── OktaLoginButton
 └── MainScreen (after authentication)
     ├── FilterBar
     │   ├── ProjectSelect
@@ -537,19 +400,14 @@ App (root model)
 ### Screen Flow
 
 ```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   Startup   │────>│   Setup     │────>│   Login     │────>│    Main     │
-│   (check    │     │  (if no     │     │   (Okta)    │     │   Screen    │
-│   keyring)  │     │  API token) │     │             │     │             │
-└─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘
-       │                                       │                   │
-       │ API token exists                      │                   │ Logout
-       └───────────────────────────────────────┘                   │
-                                                                   │
-       ┌───────────────────────────────────────────────────────────┘
-       ▼
-┌─────────────┐
-│   Login     │
-│   Screen    │
-└─────────────┘
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   Startup   │────>│   Setup     │────>│    Main     │
+│   (check    │     │  (if no     │     │   Screen    │
+│   keyring)  │     │  API token) │     │             │
+└─────────────┘     └─────────────┘     └─────────────┘
+       │
+       │ API token exists
+       └────────────────────────────────>│    Main     │
+                                         │   Screen    │
+                                         └─────────────┘
 ```

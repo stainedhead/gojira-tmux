@@ -48,7 +48,7 @@ Visual flags for tickets requiring attention:
 ### Atlassian API Token Authentication
 
 - **API access**: Atlassian API tokens for REST calls (Basic Auth)
-- **Token validation**: Verified against `/rest/api/2/myself` endpoint
+- **Token validation**: Verified against `/rest/api/3/myself` endpoint
 - **Secure storage**: Tokens stored in OS keychain
 
 ## Technology Stack

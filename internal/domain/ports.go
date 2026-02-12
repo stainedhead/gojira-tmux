@@ -72,16 +72,15 @@ type ConfigPort interface {
 
 // Config represents the application configuration.
 type Config struct {
-	Jira      JiraConfig      `yaml:"jira"`
 	Atlassian AtlassianConfig `yaml:"atlassian"`
 	Projects  []Project       `yaml:"projects"`
 	Team      []TeamMember    `yaml:"team"`
 }
 
-// JiraConfig holds Jira-specific configuration.
-type JiraConfig struct {
+// AtlassianConfig holds Atlassian-specific configuration.
+type AtlassianConfig struct {
 	URL          string            `yaml:"url"`
-	Username     string            `yaml:"username"`
+	Email        string            `yaml:"email"`
 	CustomFields CustomFieldConfig `yaml:"custom_fields,omitempty"`
 }
 
@@ -90,9 +89,4 @@ type CustomFieldConfig struct {
 	Sprint      string `yaml:"sprint,omitempty"`
 	Epic        string `yaml:"epic,omitempty"`
 	StoryPoints string `yaml:"story_points,omitempty"`
-}
-
-// AtlassianConfig holds Atlassian-specific configuration.
-type AtlassianConfig struct {
-	Email string `yaml:"email"`
 }

@@ -8,19 +8,14 @@
 flowchart TD
     A[Launch App] --> B{API Token Exists?}
     B -->|No| C[Setup Screen]
-    C --> D[Enter Jira API Token]
-    D --> E[Store in Keychain]
-    E --> F[Login Screen]
-    B -->|Yes| F
-    F --> G[Open Browser for Okta]
-    G --> H{Okta Auth Success?}
-    H -->|No| I[Error Display]
-    I --> F
-    H -->|Yes| J{User in Team List?}
-    J -->|No| I
-    J -->|Yes| K[Main Screen]
-    K --> L[Logout]
-    L --> F
+    C --> D[Enter Email + API Token]
+    D --> E[Validate Token via /rest/api/3/myself]
+    E --> F{Token Valid?}
+    F -->|No| G[Error Display]
+    G --> C
+    F -->|Yes| H[Store in Keychain]
+    H --> I[Main Screen]
+    B -->|Yes| I
 ```
 
 ### First-Time Setup
@@ -51,34 +46,6 @@ Users without a stored Jira API token see the setup screen:
 │                                                                         │
 │         Token will be stored securely in system keychain                │
 │         Press Esc to cancel                                             │
-│                                                                         │
-└─────────────────────────────────────────────────────────────────────────┘
-```
-
-### Login Screen
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                                                                         │
-│                           ╔═══════════════════╗                         │
-│                           ║    gojira-tmux    ║                         │
-│                           ╚═══════════════════╝                         │
-│                                                                         │
-│                      Jira Team Ticket Viewer                            │
-│                                                                         │
-│         ┌─────────────────────────────────────────────┐                 │
-│         │                                             │                 │
-│         │   Status: Not authenticated                 │                 │
-│         │                                             │                 │
-│         │   Okta:  https://company.okta.com           │                 │
-│         │   Jira:  https://company.atlassian.net      │                 │
-│         │                                             │                 │
-│         └─────────────────────────────────────────────┘                 │
-│                                                                         │
-│                      [ Login with Okta ]                                │
-│                                                                         │
-│         Press Enter to open browser for authentication                  │
-│         Press 'q' to quit                                               │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -181,18 +148,12 @@ Displays fields not shown in main table:
 ### config.yaml Structure
 
 ```yaml
-jira:
+atlassian:
   url: "https://company.atlassian.net"
-  username: "service-account@company.com"
-
-okta:
-  issuer: "https://company.okta.com/oauth2/default"
-  client_id: "YOUR_OKTA_CLIENT_ID"
-  callback_port: 8080
-  scopes:
-    - "openid"
-    - "profile"
-    - "email"
+  email: "your-email@company.com"
+  custom_fields:  # optional
+    sprint: "customfield_10020"
+    epic: "customfield_10014"
 
 projects:
   - key: "PROJ1"
@@ -203,6 +164,7 @@ projects:
 team:
   - name: "John Doe"
     email: "john.doe@company.com"
+    alias: "JohnD"  # optional
   - name: "Jane Smith"
     email: "jane.smith@company.com"
 ```

@@ -93,7 +93,7 @@ sequenceDiagram
     TUI->>Keyring: Check for API token
     alt No token
         TUI->>TUI: Show setup screen (email + token input)
-        TUI->>Jira: GET /rest/api/2/myself (validate token)
+        TUI->>Jira: GET /rest/api/3/myself (validate token)
         Jira->>TUI: 200 OK (email confirmed)
         TUI->>Keyring: Store API token
     end
@@ -109,7 +109,7 @@ sequenceDiagram
 Authorization: Basic base64(email:api_token)
 ```
 
-Token validation is performed against `/rest/api/2/myself` which returns the authenticated user's email, confirming the token is valid.
+Token validation is performed against `/rest/api/3/myself` which returns the authenticated user's email, confirming the token is valid.
 
 ### Secure Storage
 
@@ -128,11 +128,9 @@ Token validation is performed against `/rest/api/2/myself` which returns the aut
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
-| `/rest/api/2/myself` | GET | Token validation |
-| `/rest/api/2/search` | GET | JQL queries |
-| `/rest/api/2/project` | GET | List projects |
-| `/rest/api/2/issue/{key}` | GET | Issue details |
-| `/rest/api/2/issue/{key}/comment` | GET | Issue comments |
+| `/rest/api/3/myself` | GET | Token validation |
+| `/rest/api/3/search/jql` | GET | JQL queries (cursor-based pagination via `nextPageToken`) |
+| `/rest/api/3/issue/{key}` | GET | Issue details (with ADF description) |
 
 ### JQL Query Patterns
 

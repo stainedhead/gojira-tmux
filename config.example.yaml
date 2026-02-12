@@ -1,11 +1,13 @@
 # gojira-tmux configuration
 # Copy this file to config.yaml and update with your values.
 
-jira:
-  url: "https://your-company.atlassian.net"
-
 atlassian:
+  url: "https://your-company.atlassian.net"
   email: "your-email@company.com"
+  custom_fields:  # optional
+    sprint: "customfield_10020"
+    epic: "customfield_10014"
+    # story_points: "customfield_10028"
 
 projects:
   - key: "PROJ"

@@ -46,12 +46,12 @@ func run() error {
 	}
 
 	// Initialize Atlassian adapter
-	atlassianAdapter := auth.NewAtlassianAdapter(tokenStore, cfg.Jira.URL)
+	atlassianAdapter := auth.NewAtlassianAdapter(tokenStore, cfg.Atlassian.URL)
 
 	// Initialize Jira client using Atlassian email for authentication
 	storedToken, _ := tokenStore.GetJiraToken()
 	jiraClient := jira.NewClient(
-		cfg.Jira.URL,
+		cfg.Atlassian.URL,
 		cfg.Atlassian.Email,
 		storedToken,
 		cfg.Projects,

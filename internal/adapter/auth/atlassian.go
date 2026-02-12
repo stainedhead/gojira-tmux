@@ -31,7 +31,7 @@ func NewAtlassianAdapter(tokenStore domain.TokenStorePort, jiraURL string) *Atla
 // ValidateToken validates an Atlassian API token by calling the Jira API.
 // Returns the validated email address on success.
 func (a *AtlassianAdapter) ValidateToken(ctx context.Context, email, token string) (string, error) {
-	url := a.jiraURL + "/rest/api/2/myself"
+	url := a.jiraURL + "/rest/api/3/myself"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)

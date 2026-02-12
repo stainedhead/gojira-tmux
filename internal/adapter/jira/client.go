@@ -36,12 +36,13 @@ func NewClient(baseURL, username, token string, projects []domain.Project, team 
 func (c *Client) SearchIssues(ctx context.Context, filter domain.IssueFilter) ([]domain.Issue, error) {
 	jql := c.jqlBuilder.Build(filter)
 
-	// Build search URL
-	searchURL := fmt.Sprintf("%s/rest/api/2/search", c.baseURL)
+	// Build search URL (v3 endpoint with cursor-based pagination)
+	searchURL := fmt.Sprintf("%s/rest/api/3/search/jql", c.baseURL)
 	params := url.Values{}
 	params.Set("jql", jql)
 	params.Set("maxResults", "100")
 	params.Set("fields", "key,summary,description,status,priority,assignee,reporter,duedate,created,updated,labels")
+	// TODO: implement multi-page pagination using nextPageToken
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, searchURL+"?"+params.Encode(), nil)
 	if err != nil {
@@ -72,7 +73,7 @@ func (c *Client) SearchIssues(ctx context.Context, filter domain.IssueFilter) ([
 
 // GetIssue retrieves a single issue with all details including comments.
 func (c *Client) GetIssue(ctx context.Context, key string) (*domain.Issue, error) {
-	issueURL := fmt.Sprintf("%s/rest/api/2/issue/%s?expand=comments", c.baseURL, key)
+	issueURL := fmt.Sprintf("%s/rest/api/3/issue/%s?expand=renderedFields,comments", c.baseURL, key)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, issueURL, nil)
 	if err != nil {
@@ -113,18 +114,18 @@ func (c *Client) GetIssueComments(ctx context.Context, key string) ([]domain.Com
 // Response types for JSON parsing
 
 type searchResponse struct {
-	Total  int             `json:"total"`
-	Issues []issueResponse `json:"issues"`
+	Issues        []issueResponse `json:"issues"`
+	NextPageToken string          `json:"nextPageToken,omitempty"`
 }
 
 type issueResponse struct {
-	Key    string        `json:"key"`
-	Fields issueFields   `json:"fields"`
+	Key    string      `json:"key"`
+	Fields issueFields `json:"fields"`
 }
 
 type issueFields struct {
 	Summary     string          `json:"summary"`
-	Description string          `json:"description"`
+	Description json.RawMessage `json:"description"`
 	Status      statusField     `json:"status"`
 	Priority    *priorityField  `json:"priority"`
 	Assignee    *userField      `json:"assignee"`
@@ -154,10 +155,10 @@ type commentsField struct {
 }
 
 type commentResponse struct {
-	ID      string    `json:"id"`
-	Author  userField `json:"author"`
-	Body    string    `json:"body"`
-	Created string    `json:"created"`
+	ID      string          `json:"id"`
+	Author  userField       `json:"author"`
+	Body    json.RawMessage `json:"body"`
+	Created string          `json:"created"`
 }
 
 // Conversion methods
@@ -177,7 +178,7 @@ func (c *Client) convertIssue(issue issueResponse) *domain.Issue {
 	domainIssue := &domain.Issue{
 		Key:         issue.Key,
 		Summary:     issue.Fields.Summary,
-		Description: issue.Fields.Description,
+		Description: extractPlainText(issue.Fields.Description),
 		Status:      issue.Fields.Status.Name,
 		Labels:      issue.Fields.Labels,
 	}
@@ -214,7 +215,7 @@ func (c *Client) convertIssue(issue issueResponse) *domain.Issue {
 		domainIssue.Updated = t
 	}
 
-	// Convert comments
+	// Convert comments (ADF body → plain text)
 	if issue.Fields.Comment != nil {
 		domainIssue.Comments = make([]domain.Comment, len(issue.Fields.Comment.Comments))
 		for i, comment := range issue.Fields.Comment.Comments {
@@ -222,7 +223,7 @@ func (c *Client) convertIssue(issue issueResponse) *domain.Issue {
 			domainIssue.Comments[i] = domain.Comment{
 				ID:      comment.ID,
 				Author:  comment.Author.DisplayName,
-				Body:    comment.Body,
+				Body:    extractPlainText(comment.Body),
 				Created: created,
 			}
 		}

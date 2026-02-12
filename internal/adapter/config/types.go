@@ -7,9 +7,6 @@ import (
 // Config re-exports domain.Config for convenience.
 type Config = domain.Config
 
-// JiraConfig re-exports domain.JiraConfig for convenience.
-type JiraConfig = domain.JiraConfig
-
 // AtlassianConfig re-exports domain.AtlassianConfig for convenience.
 type AtlassianConfig = domain.AtlassianConfig
 

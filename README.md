@@ -42,10 +42,8 @@ go install github.com/stainedhead/gojira-tmux/cmd/gojira@latest
 1. **Create configuration file** (`config.yaml`):
 
 ```yaml
-jira:
-  url: "https://your-company.atlassian.net"
-
 atlassian:
+  url: "https://your-company.atlassian.net"
   email: "your-email@company.com"
 
 projects:
@@ -57,6 +55,8 @@ team:
     email: "john.doe@company.com"
     alias: "JohnD"  # optional short alias for filtering
 ```
+
+> **Upgrading?** If you have an existing config with separate `jira:` and `atlassian:` sections, see the [Migration Guide](./MIGRATION-v3.md).
 
 2. **Generate an Atlassian API token** at https://id.atlassian.com/manage/api-tokens
 

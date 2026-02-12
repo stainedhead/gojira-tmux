@@ -46,15 +46,20 @@ func (l *Loader) Load() (*domain.Config, error) {
 
 // validate checks that the configuration is valid.
 func (l *Loader) validate(cfg *domain.Config) error {
-	// Jira validation
-	if cfg.Jira.URL == "" {
-		return errors.New("jira.url is required")
+	// Atlassian URL validation
+	if cfg.Atlassian.URL == "" {
+		return errors.New("atlassian.url is required")
 	}
-	if !strings.HasPrefix(cfg.Jira.URL, "https://") {
-		return errors.New("jira.url must use HTTPS")
+	if !strings.HasPrefix(cfg.Atlassian.URL, "https://") {
+		return errors.New("atlassian.url must use HTTPS")
+	}
+	// Validate URL has a host after the scheme
+	host := strings.TrimPrefix(cfg.Atlassian.URL, "https://")
+	if host == "" || host == "/" {
+		return errors.New("atlassian.url must be a valid URL")
 	}
 
-	// Atlassian validation
+	// Atlassian email validation
 	if cfg.Atlassian.Email == "" {
 		return errors.New("atlassian.email is required")
 	}
