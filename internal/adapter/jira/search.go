@@ -112,6 +112,9 @@ func (b *JQLBuilder) buildStatusCondition(status string) string {
 	if status == "-Open-" {
 		return `status in ("Ready for Work", "In Progress", "On Hold", "Escalated")`
 	}
+	if status == "-Active-" {
+		return `status in ("In Progress", "Escalated", "Testing in Progress")`
+	}
 	return fmt.Sprintf(`status in (%s)`, escapeJQL(status))
 }
 

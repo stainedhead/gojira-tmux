@@ -281,6 +281,17 @@ func TestJQLBuilder_NotTeamSentinel_EmptyTeam(t *testing.T) {
 	}
 }
 
+func TestJQLBuilder_ActiveSentinel(t *testing.T) {
+	projects := []domain.Project{{Key: "PROJ", Name: "Project"}}
+	builder := jira.NewJQLBuilder(projects, nil)
+
+	got := builder.Build(domain.IssueFilter{Status: "-Active-"})
+	want := `project IN ("PROJ") AND status in ("In Progress", "Escalated", "Testing in Progress") ORDER BY updated DESC`
+	if got != want {
+		t.Errorf("Build(Status=-Active-)\ngot  %q\nwant %q", got, want)
+	}
+}
+
 func TestJQLBuilder_StatusPassthrough(t *testing.T) {
 	// Status values are passed directly to JQL without mapping - they come from Jira API.
 	tests := []struct {

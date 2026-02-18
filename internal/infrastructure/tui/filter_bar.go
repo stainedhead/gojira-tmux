@@ -96,15 +96,16 @@ func NewFilterBar(team []domain.TeamMember, projects []domain.Project, statuses 
 }
 
 // buildStatusOptions constructs the status option list from raw status names.
-// Always: ["All", "-Open-", ...real statuses...]
+// Always: ["All", "-Open-", "-Active-", ...real statuses...]
 func buildStatusOptions(statuses []string) []string {
 	src := statuses
 	if len(src) == 0 {
 		src = defaultFallbackStatuses
 	}
-	opts := []string{"All", "-Open-"}
+	synthetic := map[string]bool{"All": true, "-Open-": true, "-Active-": true}
+	opts := []string{"All", "-Open-", "-Active-"}
 	for _, s := range src {
-		if s != "All" && s != "-Open-" {
+		if !synthetic[s] {
 			opts = append(opts, s)
 		}
 	}

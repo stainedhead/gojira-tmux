@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -106,14 +107,35 @@ func getConfigPath() string {
 	return "config.yaml"
 }
 
-// fetchStatuses retrieves the list of Jira status names from the API.
-// Falls back to cfg.Statuses, then a built-in default list if the API call fails.
+// fetchStatuses retrieves the status names relevant to the configured projects.
+// It calls the per-project statuses endpoint for each configured project and
+// returns the union — ensuring only statuses actually used in those projects
+// appear in the filter bar.  Falls back to cfg.Statuses, then a built-in
+// default list if all API calls fail.
 func fetchStatuses(client *jira.Client, cfg *domain.Config) []string {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	if statuses, err := client.ListStatuses(ctx); err == nil && len(statuses) > 0 {
-		return statuses
+	// Union of statuses across all configured projects.
+	if len(cfg.Projects) > 0 {
+		seen := make(map[string]bool)
+		var all []string
+		for _, p := range cfg.Projects {
+			statuses, err := client.ListProjectStatuses(ctx, p.Key)
+			if err != nil {
+				continue
+			}
+			for _, s := range statuses {
+				if !seen[s] {
+					seen[s] = true
+					all = append(all, s)
+				}
+			}
+		}
+		if len(all) > 0 {
+			sort.Strings(all)
+			return all
+		}
 	}
 
 	// Config-defined fallback

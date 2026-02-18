@@ -250,7 +250,8 @@ func TestFilterBar_Dropdown_EnterConfirmsSelection(t *testing.T) {
 		t.Fatal("Dropdown should be open on Status")
 	}
 
-	// Move cursor down twice: All → -Open- → Open
+	// Move cursor down three times: All → -Open- → -Active- → Open
+	fb, _ = fb.Update(tea.KeyMsg{Type: tea.KeyDown})
 	fb, _ = fb.Update(tea.KeyMsg{Type: tea.KeyDown})
 	fb, _ = fb.Update(tea.KeyMsg{Type: tea.KeyDown})
 	// Confirm
