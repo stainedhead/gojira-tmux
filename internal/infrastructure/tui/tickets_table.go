@@ -91,20 +91,20 @@ func (t *TicketsTable) SetIssues(issues []domain.Issue) {
 
 // getAttentionIndicator returns three independent indicator circles for an issue.
 // Each circle is filled (●) when its condition is active, empty (○) otherwise.
-// Plain text (no ANSI codes) is used so the bubbles table measures width correctly.
-// Position 1: Stale — assignee inactive 14+ days
-// Position 2: No Due Date — due date not set
-// Position 3: Overdue — due date is in the past
+// The column is 10 wide to accommodate terminals that render ● as double-width.
+// Position 1 (red):    Stale — assignee inactive 14+ days
+// Position 2 (yellow): No Due Date — due date not set
+// Position 3 (cyan):   Overdue — due date is in the past
 func (t *TicketsTable) getAttentionIndicator(issue domain.Issue) string {
-	dot := func(active bool) string {
+	dot := func(active bool, style lipgloss.Style) string {
 		if active {
-			return "●"
+			return style.String()
 		}
-		return "○"
+		return Styles.DotEmpty.String()
 	}
-	return dot(issue.HasStaleIndicator()) + " " +
-		dot(issue.HasNoDueDateIndicator()) + " " +
-		dot(issue.HasOverdueIndicator())
+	return dot(issue.HasStaleIndicator(), Styles.DotRed) + " " +
+		dot(issue.HasNoDueDateIndicator(), Styles.DotYellow) + " " +
+		dot(issue.HasOverdueIndicator(), Styles.DotCyan)
 }
 
 // SelectedIssue returns the currently selected issue.

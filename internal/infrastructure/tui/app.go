@@ -125,7 +125,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		a.width = msg.Width
 		a.height = msg.Height
-		return a, nil
+		// Forward to active screen so it can resize its components.
+		return a.updateCurrentScreen(msg)
 
 	case tea.KeyMsg:
 		// Global quit handling
@@ -163,10 +164,20 @@ func (a *App) initCurrentScreen() tea.Cmd {
 		if a.setupScreen == nil {
 			a.setupScreen = NewSetupScreenModel(a.tokenStore, a.authPort)
 		}
+		// Inject current terminal size so the screen can layout correctly from the
+		// first render, even if WindowSizeMsg arrived before this screen existed.
+		if a.width > 0 && a.height > 0 {
+			a.setupScreen, _ = a.setupScreen.Update(tea.WindowSizeMsg{Width: a.width, Height: a.height})
+		}
 		return a.setupScreen.Init()
 	case ScreenMain:
 		if a.mainScreen == nil {
 			a.mainScreen = NewMainScreen(a.jiraPort, a.configPort, a.user, a.config, a.statuses)
+		}
+		// Inject current terminal size so the screen can layout correctly from the
+		// first render, even if WindowSizeMsg arrived before this screen existed.
+		if a.width > 0 && a.height > 0 {
+			a.mainScreen, _ = a.mainScreen.Update(tea.WindowSizeMsg{Width: a.width, Height: a.height})
 		}
 		return a.mainScreen.Init()
 	}
