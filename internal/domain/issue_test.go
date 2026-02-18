@@ -494,6 +494,179 @@ func TestIssue_LastAssigneeComment(t *testing.T) {
 	}
 }
 
+func TestIssue_HasStaleIndicator(t *testing.T) {
+	now := time.Now()
+
+	tests := []struct {
+		name  string
+		issue domain.Issue
+		want  bool
+	}{
+		{
+			name: "done status suppresses stale indicator",
+			issue: domain.Issue{
+				Key: "PROJ-1", Summary: "Test", Status: "Done",
+				Assignee: &domain.TeamMember{Name: "John", Email: "john@test.com"},
+				Created:  now.Add(-15 * 24 * time.Hour),
+				Updated:  now.Add(-15 * 24 * time.Hour),
+			},
+			want: false,
+		},
+		{
+			name: "no assignee never stale",
+			issue: domain.Issue{
+				Key: "PROJ-1", Summary: "Test", Status: "In Progress",
+				Created: now.Add(-20 * 24 * time.Hour),
+				Updated: now.Add(-20 * 24 * time.Hour),
+			},
+			want: false,
+		},
+		{
+			name: "old assigned issue is stale",
+			issue: domain.Issue{
+				Key:      "PROJ-1",
+				Summary:  "Test",
+				Status:   "In Progress",
+				Assignee: &domain.TeamMember{Name: "John", Email: "john@test.com"},
+				Created:  now.Add(-15 * 24 * time.Hour),
+				Updated:  now.Add(-15 * 24 * time.Hour),
+			},
+			want: true,
+		},
+		{
+			name: "recent activity not stale",
+			issue: domain.Issue{
+				Key:      "PROJ-1",
+				Summary:  "Test",
+				Status:   "In Progress",
+				Assignee: &domain.TeamMember{Name: "John", Email: "john@test.com"},
+				Created:  now.Add(-30 * 24 * time.Hour),
+				Updated:  now.Add(-1 * 24 * time.Hour),
+			},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.issue.HasStaleIndicator(); got != tt.want {
+				t.Errorf("HasStaleIndicator() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIssue_HasNoDueDateIndicator(t *testing.T) {
+	now := time.Now()
+	future := now.Add(7 * 24 * time.Hour)
+	past := now.Add(-7 * 24 * time.Hour)
+
+	tests := []struct {
+		name  string
+		issue domain.Issue
+		want  bool
+	}{
+		{
+			name: "done status suppresses indicator",
+			issue: domain.Issue{
+				Key: "PROJ-1", Summary: "Test", Status: "Done",
+				Created: now, Updated: now,
+			},
+			want: false,
+		},
+		{
+			name: "active status with no due date triggers indicator",
+			issue: domain.Issue{
+				Key: "PROJ-1", Summary: "Test", Status: "In Progress",
+				Created: now, Updated: now,
+			},
+			want: true,
+		},
+		{
+			name: "active status with future due date does not trigger",
+			issue: domain.Issue{
+				Key: "PROJ-1", Summary: "Test", Status: "In Progress",
+				DueDate: &future,
+				Created: now, Updated: now,
+			},
+			want: false,
+		},
+		{
+			name: "active status with past due date does not trigger (overdue, but has a date)",
+			issue: domain.Issue{
+				Key: "PROJ-1", Summary: "Test", Status: "In Progress",
+				DueDate: &past,
+				Created: now, Updated: now,
+			},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.issue.HasNoDueDateIndicator(); got != tt.want {
+				t.Errorf("HasNoDueDateIndicator() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIssue_HasOverdueIndicator(t *testing.T) {
+	now := time.Now()
+	future := now.Add(7 * 24 * time.Hour)
+	past := now.Add(-7 * 24 * time.Hour)
+
+	tests := []struct {
+		name  string
+		issue domain.Issue
+		want  bool
+	}{
+		{
+			name: "done status suppresses overdue indicator",
+			issue: domain.Issue{
+				Key: "PROJ-1", Summary: "Test", Status: "Done",
+				DueDate: &past,
+				Created: now, Updated: now,
+			},
+			want: false,
+		},
+		{
+			name: "no due date is not overdue",
+			issue: domain.Issue{
+				Key: "PROJ-1", Summary: "Test", Status: "In Progress",
+				Created: now, Updated: now,
+			},
+			want: false,
+		},
+		{
+			name: "future due date is not overdue",
+			issue: domain.Issue{
+				Key: "PROJ-1", Summary: "Test", Status: "In Progress",
+				DueDate: &future,
+				Created: now, Updated: now,
+			},
+			want: false,
+		},
+		{
+			name: "past due date is overdue",
+			issue: domain.Issue{
+				Key: "PROJ-1", Summary: "Test", Status: "In Progress",
+				DueDate: &past,
+				Created: now, Updated: now,
+			},
+			want: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.issue.HasOverdueIndicator(); got != tt.want {
+				t.Errorf("HasOverdueIndicator() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestIssue_LastCommentAt(t *testing.T) {
 	now := time.Now()
 

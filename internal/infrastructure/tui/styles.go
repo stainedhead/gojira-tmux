@@ -62,6 +62,8 @@ var Styles = struct {
 	DotRed        lipgloss.Style
 	DotYellow     lipgloss.Style
 	DotGreen      lipgloss.Style
+	DotCyan       lipgloss.Style
+	DotEmpty      lipgloss.Style
 
 	// Filter bar
 	FilterBar     lipgloss.Style
@@ -172,6 +174,14 @@ var Styles = struct {
 	DotGreen: lipgloss.NewStyle().
 		Foreground(Colors.Success).
 		SetString("●"),
+
+	DotCyan: lipgloss.NewStyle().
+		Foreground(Colors.Secondary).
+		SetString("●"),
+
+	DotEmpty: lipgloss.NewStyle().
+		Foreground(Colors.Muted).
+		SetString("○"),
 
 	// Filter bar
 	FilterBar: lipgloss.NewStyle().

@@ -19,6 +19,8 @@ const (
 	AttentionNoDueDate
 	// AttentionStale indicates a red dot (assignee hasn't commented in 14+ days).
 	AttentionStale
+	// AttentionOverdue indicates a cyan dot (issue has passed its due date).
+	AttentionOverdue
 )
 
 // Issue represents a Jira ticket.
@@ -115,6 +117,36 @@ func (i *Issue) IsStale() bool {
 		lastActivity = i.Created
 	}
 	return time.Since(lastActivity) > 14*24*time.Hour
+}
+
+// HasStaleIndicator reports whether the stale indicator should show for this issue.
+// Returns true when the status is not terminal and the assignee has not engaged in 14+ days.
+func (i *Issue) HasStaleIndicator() bool {
+	if doneStatuses[i.Status] {
+		return false
+	}
+	return i.IsStale()
+}
+
+// HasNoDueDateIndicator reports whether the no-due-date indicator should show.
+// Returns true when the status is not terminal and no due date is set.
+func (i *Issue) HasNoDueDateIndicator() bool {
+	if doneStatuses[i.Status] {
+		return false
+	}
+	return i.DueDate == nil
+}
+
+// HasOverdueIndicator reports whether the overdue indicator should show.
+// Returns true when the status is not terminal, a due date is set, and it is in the past.
+func (i *Issue) HasOverdueIndicator() bool {
+	if doneStatuses[i.Status] {
+		return false
+	}
+	if i.DueDate == nil {
+		return false
+	}
+	return i.DueDate.Before(time.Now())
 }
 
 // LastCommentAt returns the creation time of the most recent comment,

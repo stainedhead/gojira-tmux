@@ -41,6 +41,7 @@ type MainScreen struct {
 	filter          domain.IssueFilter
 	selectedIssue   *domain.Issue
 	showDetails     bool
+	showLegend      bool
 	loading         bool
 	loadingDetails  bool
 	err             error
@@ -183,11 +184,20 @@ func (s *MainScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		switch msg.String() {
+		case "?":
+			s.showLegend = !s.showLegend
+			return s, nil
 		case "r":
+			if s.showLegend {
+				return s, nil
+			}
 			return s, s.loadIssues()
 		case "q", "ctrl+c":
 			return s, tea.Quit
 		case "f":
+			if s.showLegend {
+				return s, nil
+			}
 			// Toggle focus to filter bar
 			s.setFocus(MainFocusFilter)
 			return s, nil
@@ -205,6 +215,11 @@ func (s *MainScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			s.cycleFocusReverse()
 			return s, nil
 		case "esc":
+			// Escape closes the legend popup first
+			if s.showLegend {
+				s.showLegend = false
+				return s, nil
+			}
 			// Escape closes the detail view (from any sub-panel or the table itself)
 			if s.showDetails {
 				s.showDetails = false
@@ -384,7 +399,9 @@ func (s *MainScreen) View() string {
 	s.renderFilterBar(&b)
 
 	// Main content
-	if s.loading {
+	if s.showLegend {
+		s.renderLegend(&b)
+	} else if s.loading {
 		s.renderLoading(&b)
 	} else if s.err != nil {
 		s.renderError(&b)
@@ -471,6 +488,35 @@ func (s *MainScreen) renderSplitView(b *strings.Builder) {
 	b.WriteString("\n")
 }
 
+func (s *MainScreen) renderLegend(b *strings.Builder) {
+	title := Styles.PanelTitle.Render("Indicator Legend")
+
+	row := func(dotStyle lipgloss.Style, name, desc string) string {
+		return lipgloss.JoinHorizontal(lipgloss.Top,
+			dotStyle.String(),
+			"  ",
+			Styles.HelpKey.Render(name),
+		) + "\n    " + Styles.HelpDesc.Render(desc)
+	}
+
+	content := strings.Join([]string{
+		title,
+		"",
+		row(Styles.DotRed, "Stale", "Assignee has not commented in 14+ days"),
+		"",
+		row(Styles.DotYellow, "No Due Date", "Issue has no due date set"),
+		"",
+		row(Styles.DotCyan, "Overdue", "Due date has passed"),
+		"",
+		Styles.DotEmpty.String() + "  " + Styles.HelpDesc.Render("Indicator not triggered"),
+		"",
+		Styles.Muted.Render("Press ? or esc to close"),
+	}, "\n")
+
+	b.WriteString(Styles.Panel.Render(content))
+	b.WriteString("\n")
+}
+
 func (s *MainScreen) renderFooter(b *strings.Builder) {
 	var help string
 	if s.showDetails {
@@ -494,6 +540,8 @@ func (s *MainScreen) renderFooter(b *strings.Builder) {
 			Styles.HelpDesc.Render(" switch focus  "),
 			Styles.HelpKey.Render("f"),
 			Styles.HelpDesc.Render(" filter  "),
+			Styles.HelpKey.Render("?"),
+			Styles.HelpDesc.Render(" legend  "),
 			Styles.HelpKey.Render("r"),
 			Styles.HelpDesc.Render(" refresh  "),
 			Styles.HelpKey.Render("q"),

@@ -25,7 +25,7 @@ type TicketsTable struct {
 // NewTicketsTable creates a new tickets table.
 func NewTicketsTable() *TicketsTable {
 	columns := []table.Column{
-		{Title: "!", Width: 1},
+		{Title: "   ", Width: 3},
 		{Title: "Key", Width: 12},
 		{Title: "Summary", Width: 50},
 		{Title: "Status", Width: 15},
@@ -88,17 +88,21 @@ func (t *TicketsTable) SetIssues(issues []domain.Issue) {
 	t.table.SetRows(rows)
 }
 
-// getAttentionIndicator returns the attention indicator for an issue.
+// getAttentionIndicator returns three independent indicator circles for an issue.
+// Each circle is filled (●) when its condition is active, empty (○) otherwise.
+// Position 1 (red):    Stale — assignee inactive 14+ days
+// Position 2 (yellow): No Due Date — due date not set
+// Position 3 (cyan):   Overdue — due date is in the past
 func (t *TicketsTable) getAttentionIndicator(issue domain.Issue) string {
-	attention := issue.NeedsAttention()
-	switch attention {
-	case domain.AttentionStale:
-		return Styles.DotRed.String()
-	case domain.AttentionNoDueDate:
-		return Styles.DotYellow.String()
-	default:
-		return " "
+	dot := func(active bool, style lipgloss.Style) string {
+		if active {
+			return style.String()
+		}
+		return Styles.DotEmpty.String()
 	}
+	return dot(issue.HasStaleIndicator(), Styles.DotRed) +
+		dot(issue.HasNoDueDateIndicator(), Styles.DotYellow) +
+		dot(issue.HasOverdueIndicator(), Styles.DotCyan)
 }
 
 // SelectedIssue returns the currently selected issue.
@@ -117,10 +121,10 @@ func (t *TicketsTable) SetSize(width, height int) {
 	t.table.SetHeight(height)
 
 	// Adjust summary column width based on available space.
-	// Fixed cols: ! + Key + Status + Priority + Assignee + DueDate + LastComment + Labels + padding
+	// Fixed cols: indicators + Key + Status + Priority + Assignee + DueDate + LastComment + Labels + padding
 	cols := t.table.Columns()
 	if len(cols) > 2 {
-		fixedWidth := 1 + 12 + 15 + 8 + 18 + 10 + 12 + 18 + 20 // columns + padding
+		fixedWidth := 3 + 12 + 15 + 8 + 18 + 10 + 12 + 18 + 20 // columns + padding
 		summaryWidth := width - fixedWidth
 		if summaryWidth < 20 {
 			summaryWidth = 20
@@ -233,16 +237,16 @@ func truncate(s string, maxLen int) string {
 func FormatIssueRow(issue domain.Issue, width int) string {
 	var b strings.Builder
 
-	// Attention indicator
-	attention := issue.NeedsAttention()
-	switch attention {
-	case domain.AttentionStale:
-		b.WriteString(Styles.DotRed.String())
-	case domain.AttentionNoDueDate:
-		b.WriteString(Styles.DotYellow.String())
-	default:
-		b.WriteString(" ")
+	// Attention indicators — three independent circles
+	dot := func(active bool, style lipgloss.Style) string {
+		if active {
+			return style.String()
+		}
+		return Styles.DotEmpty.String()
 	}
+	b.WriteString(dot(issue.HasStaleIndicator(), Styles.DotRed))
+	b.WriteString(dot(issue.HasNoDueDateIndicator(), Styles.DotYellow))
+	b.WriteString(dot(issue.HasOverdueIndicator(), Styles.DotCyan))
 	b.WriteString(" ")
 
 	// Key
