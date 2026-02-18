@@ -165,3 +165,64 @@ func TestFormatLabels(t *testing.T) {
 		})
 	}
 }
+
+func TestFilterExcludedLabels(t *testing.T) {
+	tests := []struct {
+		name    string
+		labels  []string
+		exclude map[string]bool
+		want    []string
+	}{
+		{
+			name:    "nil exclude set keeps all labels",
+			labels:  []string{"bug", "backend"},
+			exclude: nil,
+			want:    []string{"bug", "backend"},
+		},
+		{
+			name:    "empty exclude set keeps all labels",
+			labels:  []string{"bug", "backend"},
+			exclude: map[string]bool{},
+			want:    []string{"bug", "backend"},
+		},
+		{
+			name:    "removes matching label",
+			labels:  []string{"bug", "internal", "backend"},
+			exclude: map[string]bool{"internal": true},
+			want:    []string{"bug", "backend"},
+		},
+		{
+			name:    "removes multiple matching labels",
+			labels:  []string{"bug", "internal", "wip", "backend"},
+			exclude: map[string]bool{"internal": true, "wip": true},
+			want:    []string{"bug", "backend"},
+		},
+		{
+			name:    "removes all labels returns empty slice",
+			labels:  []string{"internal", "wip"},
+			exclude: map[string]bool{"internal": true, "wip": true},
+			want:    []string{},
+		},
+		{
+			name:    "nil labels returns nil",
+			labels:  nil,
+			exclude: map[string]bool{"internal": true},
+			want:    nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := filterExcludedLabels(tt.labels, tt.exclude)
+			if len(got) != len(tt.want) {
+				t.Errorf("filterExcludedLabels() len = %d, want %d; got %v", len(got), len(tt.want), got)
+				return
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Errorf("filterExcludedLabels()[%d] = %q, want %q", i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}

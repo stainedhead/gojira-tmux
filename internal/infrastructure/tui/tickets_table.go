@@ -14,11 +14,12 @@ import (
 
 // TicketsTable displays a table of Jira issues.
 type TicketsTable struct {
-	table    table.Model
-	issues   []domain.Issue
-	selected int
-	width    int
-	height   int
+	table         table.Model
+	issues        []domain.Issue
+	excludeLabels map[string]bool
+	selected      int
+	width         int
+	height        int
 }
 
 // NewTicketsTable creates a new tickets table.
@@ -70,6 +71,7 @@ func (t *TicketsTable) SetIssues(issues []domain.Issue) {
 			assignee = issue.Assignee.Name
 		}
 
+		visibleLabels := filterExcludedLabels(issue.Labels, t.excludeLabels)
 		rows[i] = table.Row{
 			indicator,
 			issue.Key,
@@ -79,7 +81,7 @@ func (t *TicketsTable) SetIssues(issues []domain.Issue) {
 			truncate(assignee, 16),
 			formatDueDate(issue.DueDate),
 			formatRelativeTime(issue.LastCommentAt()),
-			formatLabels(issue.Labels, 16),
+			formatLabels(visibleLabels, 16),
 		}
 	}
 
@@ -156,6 +158,34 @@ func (t *TicketsTable) Blur() {
 // Focused returns whether the table is focused.
 func (t *TicketsTable) Focused() bool {
 	return t.table.Focused()
+}
+
+// SetExcludeLabels sets the label values that should be hidden from the table.
+// Existing rows are rebuilt to apply the new exclusions.
+func (t *TicketsTable) SetExcludeLabels(labels []string) {
+	t.excludeLabels = make(map[string]bool, len(labels))
+	for _, l := range labels {
+		t.excludeLabels[l] = true
+	}
+	// Rebuild rows so the exclusion takes effect immediately.
+	t.SetIssues(t.issues)
+}
+
+// filterExcludedLabels returns a new slice with any labels in the exclude set removed.
+func filterExcludedLabels(labels []string, exclude map[string]bool) []string {
+	if labels == nil {
+		return nil
+	}
+	if len(exclude) == 0 {
+		return labels
+	}
+	out := make([]string, 0, len(labels))
+	for _, l := range labels {
+		if !exclude[l] {
+			out = append(out, l)
+		}
+	}
+	return out
 }
 
 // formatDueDate formats a due date as "YYYY-MM-DD" or "none" if nil.

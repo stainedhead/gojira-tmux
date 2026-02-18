@@ -84,11 +84,12 @@ type ConfigPort interface {
 
 // Config represents the application configuration.
 type Config struct {
-	Atlassian  AtlassianConfig `yaml:"atlassian"`
-	Projects   []Project       `yaml:"projects"`
-	Team       []TeamMember    `yaml:"team"`
-	Statuses   []string        `yaml:"statuses,omitempty"`
-	LastFilter FilterState     `yaml:"last_filter,omitempty"`
+	Atlassian     AtlassianConfig `yaml:"atlassian"`
+	Projects      []Project       `yaml:"projects"`
+	Team          []TeamMember    `yaml:"team"`
+	Statuses      []string        `yaml:"statuses,omitempty"`
+	LastFilter    FilterState     `yaml:"last_filter,omitempty"`
+	ExcludeLabels []string        `yaml:"exclude_labels,omitempty"`
 }
 
 // AtlassianConfig holds Atlassian-specific configuration.

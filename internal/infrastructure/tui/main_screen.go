@@ -36,7 +36,6 @@ type MainScreen struct {
 	table           *TicketsTable
 	propertiesPanel *PropertiesPanel
 	commentsPanel   *CommentsPanel
-	commentsPreview *CommentsPreview
 	focus           MainFocus
 	issues          []domain.Issue
 	filter          domain.IssueFilter
@@ -66,7 +65,11 @@ func NewMainScreenModel(jiraPort domain.JiraPort, configPort domain.ConfigPort, 
 	table := NewTicketsTable()
 	propertiesPanel := NewPropertiesPanel()
 	commentsPanel := NewCommentsPanel()
-	commentsPreview := NewCommentsPreview()
+
+	// Apply label exclusions from config
+	if cfg != nil && len(cfg.ExcludeLabels) > 0 {
+		table.SetExcludeLabels(cfg.ExcludeLabels)
+	}
 
 	// Restore last saved filter if available
 	if cfg != nil {
@@ -98,7 +101,6 @@ func NewMainScreenModel(jiraPort domain.JiraPort, configPort domain.ConfigPort, 
 		table:           table,
 		propertiesPanel: propertiesPanel,
 		commentsPanel:   commentsPanel,
-		commentsPreview: commentsPreview,
 		focus:           MainFocusTable,
 		filter:          initialFilter,
 		keys:            DefaultKeyMap(),
@@ -203,8 +205,8 @@ func (s *MainScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			s.cycleFocusReverse()
 			return s, nil
 		case "esc":
-			// Escape closes details or returns to table
-			if s.showDetails && (s.focus == MainFocusProperties || s.focus == MainFocusComments) {
+			// Escape closes the detail view (from any sub-panel or the table itself)
+			if s.showDetails {
 				s.showDetails = false
 				s.selectedIssue = nil
 				s.setFocus(MainFocusTable)
@@ -239,7 +241,6 @@ func (s *MainScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		s.loading = false
 		s.issues = msg.issues
 		s.table.SetIssues(msg.issues)
-		s.refreshCommentsPreview()
 		return s, nil
 
 	case issuesLoadErrorMsg:
@@ -273,8 +274,6 @@ func (s *MainScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		s.filterBar, cmd = s.filterBar.Update(msg)
 	case MainFocusTable:
 		s.table, cmd = s.table.Update(msg)
-		// Keep preview in sync as the cursor moves
-		s.refreshCommentsPreview()
 	case MainFocusProperties:
 		s.propertiesPanel, cmd = s.propertiesPanel.Update(msg)
 	case MainFocusComments:
@@ -283,40 +282,27 @@ func (s *MainScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return s, cmd
 }
 
-// commentsPreviewLines is the number of terminal lines the preview occupies
-// (1 header + up to previewMaxComments rows + 1 margin).
-const commentsPreviewLines = previewMaxComments + 2
-
 // updateComponentSizes updates sizes of all components based on current layout.
 func (s *MainScreen) updateComponentSizes() {
 	contentWidth := max(s.width-4, 0)
 	s.filterBar.SetWidth(contentWidth)
 
 	if s.showDetails {
-		// Split view: table on left (60%), details on right (40%)
-		tableWidth := contentWidth * 60 / 100
-		detailWidth := max(contentWidth-tableWidth-2, 2)
-		contentHeight := max(s.height-14, 2)
-		detailHeight := max(contentHeight/2, 1)
+		// Stacked layout: table on top (~40%), details panel below (~60%)
+		contentHeight := max(s.height-12, 4)
+		tableHeight := max(contentHeight*40/100, 3)
+		detailHeight := max(contentHeight-tableHeight-1, 2)
 
-		s.table.SetSize(tableWidth, contentHeight)
-		s.propertiesPanel.SetSize(detailWidth, detailHeight)
-		s.commentsPanel.SetSize(detailWidth, detailHeight)
-	} else {
-		// List view: table above, comments preview below
-		tableHeight := max(s.height-12-commentsPreviewLines, 1)
+		// Properties panel gets 40% width, comments gets the rest
+		propWidth := max(contentWidth*40/100, 20)
+		commentWidth := max(contentWidth-propWidth, 20)
+
 		s.table.SetSize(contentWidth, tableHeight)
-		s.commentsPreview.SetWidth(contentWidth)
-	}
-}
-
-// refreshCommentsPreview updates the inline comments preview to match the
-// currently selected table row. Safe to call after every table update.
-func (s *MainScreen) refreshCommentsPreview() {
-	if issue := s.table.SelectedIssue(); issue != nil {
-		s.commentsPreview.SetComments(issue.Comments)
+		s.propertiesPanel.SetSize(propWidth, detailHeight)
+		s.commentsPanel.SetSize(commentWidth, detailHeight)
 	} else {
-		s.commentsPreview.SetComments(nil)
+		// Full-width table
+		s.table.SetSize(contentWidth, max(s.height-12, 1))
 	}
 }
 
@@ -464,9 +450,6 @@ func (s *MainScreen) renderTable(b *strings.Builder) {
 	// Table
 	b.WriteString(s.table.View())
 	b.WriteString("\n")
-
-	// Inline comments preview (read-only, updates with selection)
-	b.WriteString(s.commentsPreview.View())
 }
 
 func (s *MainScreen) renderSplitView(b *strings.Builder) {
@@ -475,25 +458,16 @@ func (s *MainScreen) renderSplitView(b *strings.Builder) {
 	b.WriteString(count)
 	b.WriteString("\n\n")
 
-	// Render table and details side by side
-	tableView := s.table.View()
-	propertiesView := s.propertiesPanel.View()
-	commentsView := s.commentsPanel.View()
+	// Table on top (full width)
+	b.WriteString(s.table.View())
+	b.WriteString("\n")
 
-	// Stack properties and comments vertically
-	detailsView := lipgloss.JoinVertical(lipgloss.Left,
-		propertiesView,
-		commentsView,
+	// Properties and comments side by side below the table
+	detailsView := lipgloss.JoinHorizontal(lipgloss.Top,
+		s.propertiesPanel.View(),
+		s.commentsPanel.View(),
 	)
-
-	// Join table and details horizontally
-	splitView := lipgloss.JoinHorizontal(lipgloss.Top,
-		tableView,
-		"  ", // gap
-		detailsView,
-	)
-
-	b.WriteString(splitView)
+	b.WriteString(detailsView)
 	b.WriteString("\n")
 }
 
