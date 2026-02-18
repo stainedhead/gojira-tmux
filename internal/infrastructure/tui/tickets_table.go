@@ -89,12 +89,14 @@ func (t *TicketsTable) SetIssues(issues []domain.Issue) {
 	t.table.GotoTop()
 }
 
-// indicatorColWidth matches the Width of the "Issues" column definition.
-const indicatorColWidth = 10
-
-// getAttentionIndicator returns three independent indicator circles for an issue,
-// centred within the "Issues" column.
+// getAttentionIndicator returns three independent indicator circles for an issue.
 // Each circle is filled (●) when its condition is active, empty (○) otherwise.
+// Two leading spaces roughly centre the 5-visible-char string ("● ● ●") inside
+// the 10-wide "Issues" column — bubbles/table pads the remaining 3 chars on the
+// right automatically.  We intentionally avoid wrapping in a second lipgloss
+// Render call here: nesting lipgloss Width/Align renders inside the table's own
+// Width/MaxWidth/Inline cell rendering causes the inner ANSI reset codes to
+// bleed into adjacent cells, making the circles invisible.
 // Position 1 (red):    Stale — assignee inactive 14+ days
 // Position 2 (yellow): No Due Date — due date not set
 // Position 3 (cyan):   Overdue — due date is in the past
@@ -105,11 +107,10 @@ func (t *TicketsTable) getAttentionIndicator(issue domain.Issue) string {
 		}
 		return Styles.DotEmpty.String()
 	}
-	circles := dot(issue.HasStaleIndicator(), Styles.DotRed) + " " +
+	return "  " +
+		dot(issue.HasStaleIndicator(), Styles.DotRed) + " " +
 		dot(issue.HasNoDueDateIndicator(), Styles.DotYellow) + " " +
 		dot(issue.HasOverdueIndicator(), Styles.DotCyan)
-	// Centre the circles within the column width so they sit under the header.
-	return lipgloss.NewStyle().Width(indicatorColWidth).Align(lipgloss.Center).Render(circles)
 }
 
 // SelectedIssue returns the currently selected issue.
