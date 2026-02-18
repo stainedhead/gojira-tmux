@@ -180,7 +180,7 @@ var Styles = struct {
 		SetString("●"),
 
 	DotEmpty: lipgloss.NewStyle().
-		Foreground(Colors.Muted).
+		Foreground(lipgloss.Color("#9CA3AF")).
 		SetString("○"),
 
 	// Filter bar

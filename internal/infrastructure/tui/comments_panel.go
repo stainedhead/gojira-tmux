@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/stainedhead/gojira-tmux/internal/domain"
 )
@@ -25,7 +26,6 @@ func NewCommentsPanel() *CommentsPanel {
 
 // SetComments sets the comments to display (sorted newest first).
 func (c *CommentsPanel) SetComments(comments []domain.Comment) {
-	// Sort by created time, newest first
 	sorted := make([]domain.Comment, len(comments))
 	copy(sorted, comments)
 	sort.Slice(sorted, func(i, j int) bool {
@@ -77,58 +77,65 @@ func (c *CommentsPanel) Update(msg tea.Msg) (*CommentsPanel, tea.Cmd) {
 	return c, nil
 }
 
-// View renders the comments panel.
+// View renders the comments panel clamped to its set height.
 func (c *CommentsPanel) View() string {
-	var b strings.Builder
-
-	// Panel style
 	panelStyle := Styles.Panel
 	if c.focused {
 		panelStyle = Styles.FocusedPanel
 	}
 
-	// Title with count
+	// Build every content line up-front so we can apply viewport clamping.
+	var lines []string
+
 	count := len(c.comments)
 	title := "Comments"
 	if count > 0 {
 		title += " (" + intToString(count) + ")"
 	}
-	b.WriteString(Styles.PanelTitle.Render(title))
-	b.WriteString("\n")
+	lines = append(lines, Styles.PanelTitle.Render(title))
 
 	if len(c.comments) == 0 {
-		b.WriteString(Styles.Muted.Render("No comments"))
-		return panelStyle.Width(max(c.width, 0)).Height(max(c.height, 0)).Render(b.String())
-	}
-
-	// Render comments
-	for i, comment := range c.comments {
-		if i > 0 {
-			b.WriteString("\n")
-			sepWidth := c.width - 4
-			if sepWidth < 1 {
-				sepWidth = 1
-			}
-			b.WriteString(Styles.Muted.Render(strings.Repeat("─", sepWidth)))
-			b.WriteString("\n")
+		lines = append(lines, Styles.Muted.Render("No comments"))
+	} else {
+		wrapWidth := c.width - 4
+		if wrapWidth < 1 {
+			wrapWidth = 1
+		}
+		sepWidth := c.width - 4
+		if sepWidth < 1 {
+			sepWidth = 1
 		}
 
-		c.renderComment(&b, comment)
+		for i, comment := range c.comments {
+			if i > 0 {
+				lines = append(lines, "")
+				lines = append(lines, Styles.Muted.Render(strings.Repeat("─", sepWidth)))
+			}
+			header := Styles.FilterValue.Render(comment.Author) +
+				Styles.Muted.Render(" · ") +
+				Styles.Muted.Render(comment.Created.Format("Jan 2, 2006 15:04"))
+			lines = append(lines, header)
+			for _, bodyLine := range strings.Split(wrapText(comment.Body, wrapWidth), "\n") {
+				lines = append(lines, Styles.Paragraph.Render(bodyLine))
+			}
+		}
 	}
 
-	return panelStyle.Width(max(c.width, 0)).Height(max(c.height, 0)).Render(b.String())
+	return c.renderViewport(panelStyle, lines)
 }
 
-func (c *CommentsPanel) renderComment(b *strings.Builder, comment domain.Comment) {
-	// Header: Author - Date
-	header := Styles.FilterValue.Render(comment.Author)
-	header += Styles.Muted.Render(" · ")
-	header += Styles.Muted.Render(comment.Created.Format("Jan 2, 2006 15:04"))
-	b.WriteString(header)
-	b.WriteString("\n")
+// renderViewport clamps lines to the visible height and renders the panel.
+// The panel always occupies exactly c.height terminal lines (outer, including borders).
+func (c *CommentsPanel) renderViewport(panelStyle lipgloss.Style, lines []string) string {
+	viewHeight := max(c.height-2, 1)
 
-	// Body (wrapped)
-	body := wrapText(comment.Body, c.width-4)
-	b.WriteString(Styles.Paragraph.Render(body))
-	b.WriteString("\n")
+	maxScroll := max(len(lines)-viewHeight, 0)
+	if c.scrollY > maxScroll {
+		c.scrollY = maxScroll
+	}
+
+	end := min(c.scrollY+viewHeight, len(lines))
+	visible := strings.Join(lines[c.scrollY:end], "\n")
+
+	return panelStyle.Width(max(c.width, 0)).Height(max(c.height, 0)).Render(visible)
 }

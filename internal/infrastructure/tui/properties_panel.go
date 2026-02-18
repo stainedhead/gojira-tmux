@@ -72,68 +72,76 @@ func (p *PropertiesPanel) Update(msg tea.Msg) (*PropertiesPanel, tea.Cmd) {
 	return p, nil
 }
 
-// View renders the properties panel.
+// View renders the properties panel clamped to its set height.
 func (p *PropertiesPanel) View() string {
-	var b strings.Builder
-
-	// Panel style
 	panelStyle := Styles.Panel
 	if p.focused {
 		panelStyle = Styles.FocusedPanel
 	}
 
-	// Title
-	b.WriteString(Styles.PanelTitle.Render("Properties"))
-	b.WriteString("\n")
+	// Build every content line up-front so we can apply viewport clamping.
+	var lines []string
+	lines = append(lines, Styles.PanelTitle.Render("Properties"))
 
 	if p.issue == nil {
-		b.WriteString(Styles.Muted.Render("Select an issue to view details"))
-		return panelStyle.Width(max(p.width, 0)).Height(max(p.height, 0)).Render(b.String())
-	}
-
-	// Build properties list
-	properties := []struct {
-		label string
-		value string
-	}{
-		{"Key", p.issue.Key},
-		{"Status", p.issue.Status},
-		{"Priority", p.issue.Priority},
-		{"Reporter", p.getReporter()},
-		{"Assignee", p.getAssignee()},
-		{"Created", p.formatTime(p.issue.Created)},
-		{"Updated", p.formatTime(p.issue.Updated)},
-		{"Due Date", p.getDueDate()},
-		{"Sprint", p.issue.Sprint},
-		{"Epic", p.issue.Epic},
-		{"Story Points", p.getStoryPoints()},
-		{"Labels", p.getLabels()},
-	}
-
-	// Render properties
-	labelStyle := Styles.FilterLabel.Width(12)
-	valueStyle := Styles.Paragraph
-
-	for _, prop := range properties {
-		if prop.value == "" {
-			continue
+		lines = append(lines, Styles.Muted.Render("Select an issue to view details"))
+	} else {
+		labelStyle := Styles.FilterLabel.Width(12)
+		for _, prop := range []struct{ label, value string }{
+			{"Key", p.issue.Key},
+			{"Status", p.issue.Status},
+			{"Priority", p.issue.Priority},
+			{"Reporter", p.getReporter()},
+			{"Assignee", p.getAssignee()},
+			{"Created", p.formatTime(p.issue.Created)},
+			{"Updated", p.formatTime(p.issue.Updated)},
+			{"Due Date", p.getDueDate()},
+			{"Sprint", p.issue.Sprint},
+			{"Epic", p.issue.Epic},
+			{"Story Points", p.getStoryPoints()},
+			{"Labels", p.getLabels()},
+		} {
+			if prop.value == "" {
+				continue
+			}
+			lines = append(lines,
+				labelStyle.Render(prop.label+":")+" "+Styles.Paragraph.Render(prop.value),
+			)
 		}
-		b.WriteString(labelStyle.Render(prop.label + ":"))
-		b.WriteString(" ")
-		b.WriteString(valueStyle.Render(prop.value))
-		b.WriteString("\n")
+
+		if p.issue.Description != "" {
+			lines = append(lines, "")
+			lines = append(lines, Styles.FilterLabel.Render("Description:"))
+			wrapWidth := p.width - 4
+			if wrapWidth < 1 {
+				wrapWidth = 1
+			}
+			for _, dl := range strings.Split(wrapText(p.issue.Description, wrapWidth), "\n") {
+				lines = append(lines, Styles.Muted.Render(dl))
+			}
+		}
 	}
 
-	// Description (if present)
-	if p.issue.Description != "" {
-		b.WriteString("\n")
-		b.WriteString(Styles.FilterLabel.Render("Description:"))
-		b.WriteString("\n")
-		desc := wrapText(p.issue.Description, p.width-4)
-		b.WriteString(Styles.Muted.Render(desc))
+	return p.renderViewport(panelStyle, lines)
+}
+
+// renderViewport clamps lines to the visible height and renders the panel.
+// The panel always occupies exactly p.height terminal lines (outer, including borders).
+func (p *PropertiesPanel) renderViewport(panelStyle lipgloss.Style, lines []string) string {
+	// viewHeight is the number of content lines that fit inside the border.
+	// Height() in lipgloss v1 is the outer total; borders consume 2 lines.
+	viewHeight := max(p.height-2, 1)
+
+	// Clamp scroll position.
+	maxScroll := max(len(lines)-viewHeight, 0)
+	if p.scrollY > maxScroll {
+		p.scrollY = maxScroll
 	}
 
-	return panelStyle.Width(max(p.width, 0)).Height(max(p.height, 0)).Render(b.String())
+	end := min(p.scrollY+viewHeight, len(lines))
+	visible := strings.Join(lines[p.scrollY:end], "\n")
+
+	return panelStyle.Width(max(p.width, 0)).Height(max(p.height, 0)).Render(visible)
 }
 
 func (p *PropertiesPanel) getReporter() string {
