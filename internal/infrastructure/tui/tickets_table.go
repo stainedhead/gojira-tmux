@@ -5,102 +5,311 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/stainedhead/gojira-tmux/internal/domain"
 )
 
-// TicketsTable displays a table of Jira issues.
+// Fixed column content widths (excluding padding).
+const (
+	colWidthIndicator   = 10
+	colWidthKey         = 15
+	colWidthStatus      = 15
+	colWidthPriority    = 8
+	colWidthAssignee    = 18
+	colWidthDueDate     = 10
+	colWidthLastComment = 12
+	colWidthLabels      = 18
+	colMinSummary       = 20
+	colMaxSummary       = 60
+)
+
+// colPad is the number of spaces on each side of a cell.
+const colPad = 1
+
+// tableNumCols is the total number of columns.
+const tableNumCols = 9
+
+// fixedColsWidth is the total content width of all non-summary columns.
+// = 10+15+15+8+18+10+12+18 = 106
+const fixedColsWidth = colWidthIndicator + colWidthKey + colWidthStatus + colWidthPriority +
+	colWidthAssignee + colWidthDueDate + colWidthLastComment + colWidthLabels
+
+// TicketsTable displays a table of Jira issues using a custom renderer.
+//
+// It replaces bubbles/table to work around its runewidth.Truncate limitation:
+// runewidth counts ANSI escape-sequence characters as visible chars, which
+// silently corrupts any cell value containing ANSI colour codes (e.g. the
+// coloured indicator dots).  All cell sizing here is performed by
+// lipgloss.Width / MaxWidth, which is ANSI-aware.
 type TicketsTable struct {
-	table         table.Model
 	issues        []domain.Issue
 	excludeLabels map[string]bool
-	selected      int
+	cursor        int
+	offset        int
 	width         int
 	height        int
+	focused       bool
+	summaryWidth  int
+}
+
+// tableCol is a single column definition.
+type tableCol struct {
+	title string
+	width int
 }
 
 // NewTicketsTable creates a new tickets table.
 func NewTicketsTable() *TicketsTable {
-	columns := []table.Column{
-		{Title: "  Issues", Width: 10},
-		{Title: "Key", Width: 15},
-		{Title: "Summary", Width: 50},
-		{Title: "Status", Width: 15},
-		{Title: "Priority", Width: 8},
-		{Title: "Assignee", Width: 18},
-		{Title: "Due Date", Width: 10},
-		{Title: "Last Comment", Width: 12},
-		{Title: "Labels", Width: 18},
+	return &TicketsTable{summaryWidth: colMinSummary}
+}
+
+// cols returns the column definitions for the current summaryWidth.
+func (t *TicketsTable) cols() []tableCol {
+	return []tableCol{
+		{"  Issues", colWidthIndicator},
+		{"Key", colWidthKey},
+		{"Summary", t.summaryWidth},
+		{"Status", colWidthStatus},
+		{"Priority", colWidthPriority},
+		{"Assignee", colWidthAssignee},
+		{"Due Date", colWidthDueDate},
+		{"Last Comment", colWidthLastComment},
+		{"Labels", colWidthLabels},
 	}
+}
 
-	t := table.New(
-		table.WithColumns(columns),
-		table.WithFocused(true),
-		table.WithHeight(20),
-	)
+// dataRowsVisible returns the number of visible data rows
+// (total height minus the 2-line header+separator block).
+func (t *TicketsTable) dataRowsVisible() int {
+	n := t.height - 2
+	if n < 0 {
+		return 0
+	}
+	return n
+}
 
-	s := table.DefaultStyles()
-	s.Header = s.Header.
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(Colors.Border).
-		BorderBottom(true).
-		Bold(true)
-	s.Selected = s.Selected.
-		Foreground(Colors.Foreground).
-		Background(Colors.Primary).
-		Bold(true)
-	t.SetStyles(s)
-
-	return &TicketsTable{
-		table: t,
+// clampOffset adjusts the scroll offset so the cursor stays in view.
+func (t *TicketsTable) clampOffset() {
+	dr := t.dataRowsVisible()
+	if dr < 1 {
+		dr = 1
+	}
+	if t.cursor < t.offset {
+		t.offset = t.cursor
+	}
+	if t.cursor >= t.offset+dr {
+		t.offset = t.cursor - dr + 1
+	}
+	if t.offset < 0 {
+		t.offset = 0
 	}
 }
 
 // SetIssues updates the table with new issues.
 func (t *TicketsTable) SetIssues(issues []domain.Issue) {
 	t.issues = issues
-
-	rows := make([]table.Row, len(issues))
-	for i, issue := range issues {
-		indicator := t.getAttentionIndicator(issue)
-		assignee := ""
-		if issue.Assignee != nil {
-			assignee = issue.Assignee.Name
-		}
-
-		visibleLabels := filterExcludedLabels(issue.Labels, t.excludeLabels)
-		rows[i] = table.Row{
-			indicator,
-			issue.Key,
-			truncate(issue.Summary, 48),
-			issue.Status,
-			issue.Priority,
-			truncate(assignee, 16),
-			formatDueDate(issue.DueDate),
-			formatRelativeTime(issue.LastCommentAt()),
-			formatLabels(visibleLabels, 16),
-		}
+	if t.cursor >= len(issues) {
+		t.cursor = max(len(issues)-1, 0)
 	}
-
-	t.table.SetRows(rows)
-	t.table.GotoTop()
+	t.offset = 0
 }
 
-// getAttentionIndicator returns three independent indicator circles for an issue.
-// Each circle is filled (●) when its condition is active, empty (○) otherwise.
-// Two leading spaces roughly centre the 5-visible-char string ("● ● ●") inside
-// the 10-wide "Issues" column — bubbles/table pads the remaining 3 chars on the
-// right automatically.  We intentionally avoid wrapping in a second lipgloss
-// Render call here: nesting lipgloss Width/Align renders inside the table's own
-// Width/MaxWidth/Inline cell rendering causes the inner ANSI reset codes to
-// bleed into adjacent cells, making the circles invisible.
-// Position 1 (red):    Stale — assignee inactive 14+ days
-// Position 2 (yellow): No Due Date — due date not set
-// Position 3 (cyan):   Overdue — due date is in the past
-func (t *TicketsTable) getAttentionIndicator(issue domain.Issue) string {
+// SelectedIssue returns the currently selected issue.
+func (t *TicketsTable) SelectedIssue() *domain.Issue {
+	if t.cursor >= 0 && t.cursor < len(t.issues) {
+		return &t.issues[t.cursor]
+	}
+	return nil
+}
+
+// SetSize sets the table dimensions.
+// height is the total lines allocated including the header + separator rows,
+// matching the convention used by bubbles/table.SetHeight.
+func (t *TicketsTable) SetSize(width, height int) {
+	t.width = width
+	t.height = height
+	// Overhead = fixed col widths + padding (2×colPad per col) + separators (numCols−1).
+	overhead := fixedColsWidth + tableNumCols*colPad*2 + (tableNumCols - 1)
+	sumW := width - overhead
+	if sumW < colMinSummary {
+		sumW = colMinSummary
+	}
+	if sumW > colMaxSummary {
+		sumW = colMaxSummary
+	}
+	t.summaryWidth = sumW
+}
+
+// Focus sets focus on the table.
+func (t *TicketsTable) Focus() { t.focused = true }
+
+// Blur removes focus from the table.
+func (t *TicketsTable) Blur() { t.focused = false }
+
+// Focused reports whether the table is focused.
+func (t *TicketsTable) Focused() bool { return t.focused }
+
+// SetExcludeLabels sets labels to hide from the table display.
+func (t *TicketsTable) SetExcludeLabels(labels []string) {
+	t.excludeLabels = make(map[string]bool, len(labels))
+	for _, l := range labels {
+		t.excludeLabels[l] = true
+	}
+}
+
+// Update handles keyboard navigation messages.
+func (t *TicketsTable) Update(msg tea.Msg) (*TicketsTable, tea.Cmd) {
+	if !t.focused {
+		return t, nil
+	}
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		n := len(t.issues)
+		if n == 0 {
+			return t, nil
+		}
+		dr := max(t.dataRowsVisible(), 1)
+		switch msg.String() {
+		case "up", "k":
+			if t.cursor > 0 {
+				t.cursor--
+				t.clampOffset()
+			}
+		case "down", "j":
+			if t.cursor < n-1 {
+				t.cursor++
+				t.clampOffset()
+			}
+		case "g", "home":
+			t.cursor = 0
+			t.offset = 0
+		case "G", "end":
+			t.cursor = n - 1
+			t.clampOffset()
+		case "b", "pgup":
+			t.cursor = max(t.cursor-dr, 0)
+			t.clampOffset()
+		case "f", "pgdown", " ":
+			t.cursor = min(t.cursor+dr, n-1)
+			t.clampOffset()
+		case "u", "ctrl+u":
+			t.cursor = max(t.cursor-dr/2, 0)
+			t.clampOffset()
+		case "d", "ctrl+d":
+			t.cursor = min(t.cursor+dr/2, n-1)
+			t.clampOffset()
+		}
+	}
+	return t, nil
+}
+
+// View renders the table with column separators.
+func (t *TicketsTable) View() string {
+	if t.height <= 0 || t.width <= 0 {
+		return ""
+	}
+	cols := t.cols()
+	dr := t.dataRowsVisible()
+	mutedSep := Styles.Muted.Render("│")
+
+	var b strings.Builder
+
+	// ── Header ──────────────────────────────────────────────────────────────────
+	hParts := make([]string, len(cols))
+	for i, col := range cols {
+		rendered := lipgloss.NewStyle().
+			Width(col.width).MaxWidth(col.width).
+			Bold(true).Foreground(Colors.Primary).
+			Render(col.title)
+		hParts[i] = " " + rendered + " "
+	}
+	b.WriteString(strings.Join(hParts, mutedSep))
+	b.WriteString("\n")
+
+	// ── Header separator ────────────────────────────────────────────────────────
+	sParts := make([]string, len(cols))
+	for i, col := range cols {
+		sParts[i] = strings.Repeat("─", col.width+colPad*2)
+	}
+	b.WriteString(Styles.Muted.Render(strings.Join(sParts, "┼")))
+
+	// ── Data rows ───────────────────────────────────────────────────────────────
+	end := t.offset + dr
+	if end > len(t.issues) {
+		end = len(t.issues)
+	}
+	for i := t.offset; i < end; i++ {
+		b.WriteString("\n")
+		b.WriteString(t.renderIssueRow(cols, i, mutedSep))
+	}
+
+	return b.String()
+}
+
+// renderIssueRow renders a single data row.
+func (t *TicketsTable) renderIssueRow(cols []tableCol, idx int, sep string) string {
+	issue := t.issues[idx]
+	isSelected := idx == t.cursor
+
+	assignee := ""
+	if issue.Assignee != nil {
+		assignee = issue.Assignee.Name
+	}
+	labels := filterExcludedLabels(issue.Labels, t.excludeLabels)
+
+	values := []string{
+		t.getAttentionIndicator(issue, isSelected),
+		issue.Key,
+		truncate(issue.Summary, t.summaryWidth),
+		issue.Status,
+		issue.Priority,
+		truncate(assignee, colWidthAssignee),
+		formatDueDate(issue.DueDate),
+		formatRelativeTime(issue.LastCommentAt()),
+		formatLabels(labels, colWidthLabels),
+	}
+
+	parts := make([]string, len(cols))
+	for i, col := range cols {
+		rendered := lipgloss.NewStyle().Width(col.width).MaxWidth(col.width).Render(values[i])
+		parts[i] = " " + rendered + " "
+	}
+
+	// For the selected row use a plain │ so the selected background fills the
+	// entire row (a muted-coloured │ would reset the background mid-row).
+	if isSelected {
+		return Styles.TableSelected.Render(strings.Join(parts, "│"))
+	}
+	return strings.Join(parts, sep)
+}
+
+// getAttentionIndicator returns three indicator circles for an issue.
+//
+// Non-selected rows: ANSI-coloured circles — safe here because lipgloss
+// Width/MaxWidth (used in renderIssueRow) is ANSI-aware, unlike the
+// runewidth.Truncate call that bubbles/table used.
+//
+// Selected row: plain Unicode circles — the ANSI reset codes inside coloured
+// dots would otherwise cancel the selected-row background colour mid-row.
+//
+// Position 1 (red    ●): Stale  — assignee has not commented in 14+ days.
+// Position 2 (yellow ●): No Due Date.
+// Position 3 (cyan   ●): Overdue — due date has passed.
+func (t *TicketsTable) getAttentionIndicator(issue domain.Issue, isSelected bool) string {
+	if isSelected {
+		dot := func(active bool) string {
+			if active {
+				return "●"
+			}
+			return "○"
+		}
+		return "  " +
+			dot(issue.HasStaleIndicator()) + " " +
+			dot(issue.HasNoDueDateIndicator()) + " " +
+			dot(issue.HasOverdueIndicator())
+	}
 	dot := func(active bool, style lipgloss.Style) string {
 		if active {
 			return style.String()
@@ -113,75 +322,7 @@ func (t *TicketsTable) getAttentionIndicator(issue domain.Issue) string {
 		dot(issue.HasOverdueIndicator(), Styles.DotCyan)
 }
 
-// SelectedIssue returns the currently selected issue.
-func (t *TicketsTable) SelectedIssue() *domain.Issue {
-	idx := t.table.Cursor()
-	if idx >= 0 && idx < len(t.issues) {
-		return &t.issues[idx]
-	}
-	return nil
-}
-
-// SetSize sets the table size.
-func (t *TicketsTable) SetSize(width, height int) {
-	t.width = width
-	t.height = height
-	t.table.SetHeight(height)
-
-	// Adjust summary column width based on available space.
-	// Fixed cols: indicators + Key + Status + Priority + Assignee + DueDate + LastComment + Labels + padding
-	cols := t.table.Columns()
-	if len(cols) > 2 {
-		fixedWidth := 10 + 15 + 15 + 8 + 18 + 10 + 12 + 18 + 20 // columns + padding
-		summaryWidth := width - fixedWidth
-		if summaryWidth < 20 {
-			summaryWidth = 20
-		}
-		if summaryWidth > 60 {
-			summaryWidth = 60
-		}
-		cols[2].Width = summaryWidth
-		t.table.SetColumns(cols)
-	}
-}
-
-// Update handles messages for the table.
-func (t *TicketsTable) Update(msg tea.Msg) (*TicketsTable, tea.Cmd) {
-	var cmd tea.Cmd
-	t.table, cmd = t.table.Update(msg)
-	return t, cmd
-}
-
-// View renders the table.
-func (t *TicketsTable) View() string {
-	return t.table.View()
-}
-
-// Focus sets focus to the table.
-func (t *TicketsTable) Focus() {
-	t.table.Focus()
-}
-
-// Blur removes focus from the table.
-func (t *TicketsTable) Blur() {
-	t.table.Blur()
-}
-
-// Focused returns whether the table is focused.
-func (t *TicketsTable) Focused() bool {
-	return t.table.Focused()
-}
-
-// SetExcludeLabels sets the label values that should be hidden from the table.
-// Existing rows are rebuilt to apply the new exclusions.
-func (t *TicketsTable) SetExcludeLabels(labels []string) {
-	t.excludeLabels = make(map[string]bool, len(labels))
-	for _, l := range labels {
-		t.excludeLabels[l] = true
-	}
-	// Rebuild rows so the exclusion takes effect immediately.
-	t.SetIssues(t.issues)
-}
+// ─── Helper functions ──────────────────────────────────────────────────────────
 
 // filterExcludedLabels returns a new slice with any labels in the exclude set removed.
 func filterExcludedLabels(labels []string, exclude map[string]bool) []string {

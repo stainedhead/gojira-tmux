@@ -57,8 +57,16 @@ func (f *FilterBar) ExtraHeight() int {
 	if visible > maxDropdownVisible {
 		visible = maxDropdownVisible
 	}
-	// title line + border-top + items + border-bottom
-	return 1 + 1 + visible + 1
+	// Count scroll indicators that are currently shown inside the box.
+	scrollIndicators := 0
+	if f.dropdownScrollOffset > 0 {
+		scrollIndicators++
+	}
+	if f.dropdownScrollOffset+maxDropdownVisible < len(opts) {
+		scrollIndicators++
+	}
+	// title line + border-top + items + scroll indicators + border-bottom
+	return 1 + 1 + visible + scrollIndicators + 1
 }
 
 // defaultFallbackStatuses are used when no statuses are provided or fetched.
