@@ -495,6 +495,58 @@ func TestClient_GetIssueComments_Error(t *testing.T) {
 	}
 }
 
+// --- ListStatuses Tests ---
+
+func TestClient_ListStatuses_ReturnsNames(t *testing.T) {
+	srv := testutil.NewMockServer(t)
+	defer srv.Close()
+
+	srv.SetStatusResponse(testutil.StatusListResponse("To Do", "In Progress", "In Review", "Done"))
+
+	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil)
+	statuses, err := client.ListStatuses(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(statuses) != 4 {
+		t.Fatalf("got %d statuses, want 4", len(statuses))
+	}
+	if statuses[0] != "To Do" {
+		t.Errorf("statuses[0] = %q, want %q", statuses[0], "To Do")
+	}
+	if statuses[3] != "Done" {
+		t.Errorf("statuses[3] = %q, want %q", statuses[3], "Done")
+	}
+}
+
+func TestClient_ListStatuses_Unauthorized(t *testing.T) {
+	srv := testutil.NewMockServer(t)
+	defer srv.Close()
+
+	client := jira.NewClient(srv.BaseURL(), "wrong@example.com", "wrong-token", nil, nil)
+	_, err := client.ListStatuses(context.Background())
+	if err == nil {
+		t.Fatal("expected error for unauthorized request")
+	}
+}
+
+func TestClient_ListStatuses_ServerError(t *testing.T) {
+	srv := testutil.NewMockServer(t)
+	defer srv.Close()
+
+	srv.SetStatusError(http.StatusInternalServerError)
+
+	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil)
+	_, err := client.ListStatuses(context.Background())
+	if err == nil {
+		t.Fatal("expected error for server error")
+	}
+	if !strings.Contains(err.Error(), "500") {
+		t.Errorf("error = %q, want to contain '500'", err.Error())
+	}
+}
+
 // --- Basic Auth Tests ---
 
 func TestClient_SearchIssues_SendsBasicAuth(t *testing.T) {

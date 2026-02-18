@@ -1,15 +1,18 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/stainedhead/gojira-tmux/internal/adapter/auth"
 	"github.com/stainedhead/gojira-tmux/internal/adapter/config"
 	"github.com/stainedhead/gojira-tmux/internal/adapter/jira"
+	"github.com/stainedhead/gojira-tmux/internal/domain"
 	"github.com/stainedhead/gojira-tmux/internal/infrastructure/tui"
 )
 
@@ -58,12 +61,17 @@ func run() error {
 		cfg.Team,
 	)
 
+	// Fetch available Jira statuses (best-effort; falls back to config or defaults)
+	statuses := fetchStatuses(jiraClient, cfg)
+
 	// Create application
 	app := tui.NewApp(
 		tui.WithTokenStore(tokenStore),
 		tui.WithAuthPort(atlassianAdapter),
 		tui.WithJiraPort(jiraClient),
 		tui.WithConfigPort(configLoader),
+		tui.WithConfig(cfg),
+		tui.WithStatuses(statuses),
 	)
 
 	// Run TUI
@@ -96,6 +104,25 @@ func getConfigPath() string {
 
 	// Default to current directory
 	return "config.yaml"
+}
+
+// fetchStatuses retrieves the list of Jira status names from the API.
+// Falls back to cfg.Statuses, then a built-in default list if the API call fails.
+func fetchStatuses(client *jira.Client, cfg *domain.Config) []string {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if statuses, err := client.ListStatuses(ctx); err == nil && len(statuses) > 0 {
+		return statuses
+	}
+
+	// Config-defined fallback
+	if len(cfg.Statuses) > 0 {
+		return cfg.Statuses
+	}
+
+	// Built-in defaults
+	return []string{"To Do", "In Progress", "In Review", "Done"}
 }
 
 // getCredentialsPath returns the path to store credentials.

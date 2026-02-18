@@ -15,6 +15,7 @@ type MockJiraPort struct {
 	SearchIssuesFunc     func(ctx context.Context, filter domain.IssueFilter) ([]domain.Issue, error)
 	GetIssueFunc         func(ctx context.Context, key string) (*domain.Issue, error)
 	GetIssueCommentsFunc func(ctx context.Context, key string) ([]domain.Comment, error)
+	ListStatusesFunc     func(ctx context.Context) ([]string, error)
 }
 
 func (m *MockJiraPort) SearchIssues(ctx context.Context, filter domain.IssueFilter) ([]domain.Issue, error) {
@@ -36,6 +37,13 @@ func (m *MockJiraPort) GetIssueComments(ctx context.Context, key string) ([]doma
 		return m.GetIssueCommentsFunc(ctx, key)
 	}
 	return nil, nil
+}
+
+func (m *MockJiraPort) ListStatuses(ctx context.Context) ([]string, error) {
+	if m.ListStatusesFunc != nil {
+		return m.ListStatusesFunc(ctx)
+	}
+	return []string{"To Do", "In Progress", "Done"}, nil
 }
 
 func TestListIssues_Execute_Success(t *testing.T) {

@@ -8,7 +8,14 @@ import (
 type IssueFilter struct {
 	Project  string // Empty or "-All-" means all projects
 	Assignee string // Empty or "-All-" means all assignees
-	Status   string // "All", "Open", "Ready", "In Test", "Done"
+	Status   string // "All" means no filter; otherwise the exact Jira status name
+}
+
+// FilterState holds persisted filter selections for config storage.
+type FilterState struct {
+	Assignee string `yaml:"assignee,omitempty"`
+	Project  string `yaml:"project,omitempty"`
+	Status   string `yaml:"status,omitempty"`
 }
 
 // IsEmpty returns true if no filters are applied.
@@ -29,6 +36,9 @@ type JiraPort interface {
 
 	// GetIssueComments retrieves comments for an issue.
 	GetIssueComments(ctx context.Context, key string) ([]Comment, error)
+
+	// ListStatuses returns all available issue status names from the Jira instance.
+	ListStatuses(ctx context.Context) ([]string, error)
 }
 
 // AuthPort defines the interface for authentication operations.
@@ -62,19 +72,23 @@ type ConfigPort interface {
 	// Load reads and parses the configuration file.
 	Load() (*Config, error)
 
+	// Save writes the configuration back to the file.
+	Save(config *Config) error
+
 	// GetProjects returns configured projects.
 	GetProjects() []Project
 
 	// GetTeamMembers returns configured team members.
 	GetTeamMembers() []TeamMember
-
 }
 
 // Config represents the application configuration.
 type Config struct {
-	Atlassian AtlassianConfig `yaml:"atlassian"`
-	Projects  []Project       `yaml:"projects"`
-	Team      []TeamMember    `yaml:"team"`
+	Atlassian  AtlassianConfig `yaml:"atlassian"`
+	Projects   []Project       `yaml:"projects"`
+	Team       []TeamMember    `yaml:"team"`
+	Statuses   []string        `yaml:"statuses,omitempty"`
+	LastFilter FilterState     `yaml:"last_filter,omitempty"`
 }
 
 // AtlassianConfig holds Atlassian-specific configuration.

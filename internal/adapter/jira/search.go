@@ -85,35 +85,12 @@ func (b *JQLBuilder) buildAssigneeCondition(identifier string) string {
 }
 
 // buildStatusCondition builds the status filter condition.
+// The status value is the exact Jira status name (fetched from the API).
 func (b *JQLBuilder) buildStatusCondition(status string) string {
 	if status == "" || status == "All" {
 		return ""
 	}
-
-	jqlStatus := MapStatus(status)
-	if jqlStatus == "" {
-		return ""
-	}
-
-	return fmt.Sprintf(`status = %s`, escapeJQL(jqlStatus))
-}
-
-// MapStatus maps UI status to JQL status.
-func MapStatus(uiStatus string) string {
-	switch uiStatus {
-	case "Open":
-		return "Open"
-	case "Ready":
-		return "Ready for Development"
-	case "In Test":
-		return "In Test"
-	case "Done":
-		return "Done"
-	case "All", "":
-		return ""
-	default:
-		return uiStatus
-	}
+	return fmt.Sprintf(`status in (%s)`, escapeJQL(status))
 }
 
 // escapeJQL escapes special characters in JQL values and wraps in quotes.

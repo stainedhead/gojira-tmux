@@ -126,6 +126,19 @@ func isValidEmail(email string) bool {
 	return true
 }
 
+// Save writes the configuration back to the config file.
+func (l *Loader) Save(config *domain.Config) error {
+	data, err := yaml.Marshal(config)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+	if err := os.WriteFile(l.path, data, 0o600); err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+	l.config = config
+	return nil
+}
+
 // GetProjects returns configured projects.
 func (l *Loader) GetProjects() []domain.Project {
 	if l.config == nil {

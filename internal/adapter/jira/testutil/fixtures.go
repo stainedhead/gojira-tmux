@@ -1,12 +1,16 @@
 package testutil
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 // V3 API endpoint paths.
 const (
 	V3SearchPath = "/rest/api/3/search/jql"
 	V3MyselfPath = "/rest/api/3/myself"
 	V3IssuePath  = "/rest/api/3/issue/"
+	V3StatusPath = "/rest/api/3/status"
 )
 
 // MyselfResponse returns a realistic v3 /myself JSON response.
@@ -224,6 +228,25 @@ func IssueWithCommentsResponse() json.RawMessage {
 			},
 		),
 	)
+}
+
+// StatusListResponse returns a /rest/api/3/status response for the given status names.
+func StatusListResponse(names ...string) json.RawMessage {
+	statuses := make([]map[string]interface{}, len(names))
+	for i, name := range names {
+		statuses[i] = map[string]interface{}{
+			"id":          fmt.Sprintf("%d", i+1),
+			"name":        name,
+			"description": "",
+			"statusCategory": map[string]interface{}{
+				"id":   i + 1,
+				"key":  "undefined",
+				"name": name,
+			},
+		}
+	}
+	b, _ := json.Marshal(statuses)
+	return b
 }
 
 // ErrorResponse returns a Jira error response body.

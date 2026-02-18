@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/stainedhead/gojira-tmux/internal/adapter/config"
+	"github.com/stainedhead/gojira-tmux/internal/domain"
 )
 
 // validMinimalYAML provides a minimal valid config for new unified format.
@@ -816,6 +817,105 @@ func TestLoader_GetTeamMembers_BeforeLoad(t *testing.T) {
 	team := loader.GetTeamMembers()
 	if team != nil {
 		t.Errorf("GetTeamMembers() before Load() = %v, want nil", team)
+	}
+}
+
+// --- Save Tests ---
+
+func TestLoader_Save_PersistsFilterState(t *testing.T) {
+	loader := setupLoader(t, validMinimalYAML)
+	cfg, err := loader.Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	cfg.LastFilter.Assignee = "John Doe"
+	cfg.LastFilter.Project = "PROJ"
+	cfg.LastFilter.Status = "In Progress"
+
+	if err := loader.Save(cfg); err != nil {
+		t.Fatalf("Save() error: %v", err)
+	}
+
+	// Reload and verify
+	cfg2, err := loader.Load()
+	if err != nil {
+		t.Fatalf("Load() after Save() error: %v", err)
+	}
+	if cfg2.LastFilter.Assignee != "John Doe" {
+		t.Errorf("LastFilter.Assignee = %q, want %q", cfg2.LastFilter.Assignee, "John Doe")
+	}
+	if cfg2.LastFilter.Project != "PROJ" {
+		t.Errorf("LastFilter.Project = %q, want %q", cfg2.LastFilter.Project, "PROJ")
+	}
+	if cfg2.LastFilter.Status != "In Progress" {
+		t.Errorf("LastFilter.Status = %q, want %q", cfg2.LastFilter.Status, "In Progress")
+	}
+}
+
+func TestLoader_Save_PreservesExistingFields(t *testing.T) {
+	loader := setupLoader(t, validMinimalYAML)
+	cfg, err := loader.Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	cfg.LastFilter.Status = "Done"
+	if err := loader.Save(cfg); err != nil {
+		t.Fatalf("Save() error: %v", err)
+	}
+
+	cfg2, err := loader.Load()
+	if err != nil {
+		t.Fatalf("Load() after Save() error: %v", err)
+	}
+	// Original fields must still be present
+	if cfg2.Atlassian.URL != "https://example.atlassian.net" {
+		t.Errorf("Atlassian.URL lost after Save: %q", cfg2.Atlassian.URL)
+	}
+	if len(cfg2.Projects) != 1 {
+		t.Errorf("Projects lost after Save: got %d", len(cfg2.Projects))
+	}
+	if len(cfg2.Team) != 1 {
+		t.Errorf("Team lost after Save: got %d", len(cfg2.Team))
+	}
+}
+
+func TestLoader_Save_ClearsFilter(t *testing.T) {
+	loader := setupLoader(t, validMinimalYAML)
+	cfg, err := loader.Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	cfg.LastFilter.Status = "Open"
+	_ = loader.Save(cfg)
+
+	// Clear and save again
+	cfg.LastFilter = domain.FilterState{}
+	if err := loader.Save(cfg); err != nil {
+		t.Fatalf("Save() after clear error: %v", err)
+	}
+
+	cfg2, err := loader.Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if cfg2.LastFilter.Status != "" {
+		t.Errorf("LastFilter.Status = %q after clear, want empty", cfg2.LastFilter.Status)
+	}
+}
+
+func TestLoader_Save_InvalidPath(t *testing.T) {
+	loader := config.NewLoader("/nonexistent/directory/config.yaml")
+	cfg := &domain.Config{
+		Atlassian: domain.AtlassianConfig{URL: "https://example.atlassian.net", Email: "u@e.com"},
+		Projects:  []domain.Project{{Key: "PROJ", Name: "P"}},
+		Team:      []domain.TeamMember{{Name: "A", Email: "a@b.com"}},
+	}
+	err := loader.Save(cfg)
+	if err == nil {
+		t.Error("Save() to invalid path should return error")
 	}
 }
 

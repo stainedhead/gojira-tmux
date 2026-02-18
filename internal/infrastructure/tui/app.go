@@ -22,8 +22,9 @@ type App struct {
 	height int
 
 	// Shared state
-	config *domain.Config
-	user   *domain.User
+	config   *domain.Config
+	user     *domain.User
+	statuses []string
 
 	// Dependencies (to be injected)
 	tokenStore domain.TokenStorePort
@@ -67,6 +68,20 @@ func WithJiraPort(jp domain.JiraPort) AppOption {
 func WithConfigPort(cp domain.ConfigPort) AppOption {
 	return func(a *App) {
 		a.configPort = cp
+	}
+}
+
+// WithConfig sets the loaded application configuration.
+func WithConfig(cfg *domain.Config) AppOption {
+	return func(a *App) {
+		a.config = cfg
+	}
+}
+
+// WithStatuses sets the Jira status names for the filter bar.
+func WithStatuses(ss []string) AppOption {
+	return func(a *App) {
+		a.statuses = ss
 	}
 }
 
@@ -151,7 +166,7 @@ func (a *App) initCurrentScreen() tea.Cmd {
 		return a.setupScreen.Init()
 	case ScreenMain:
 		if a.mainScreen == nil {
-			a.mainScreen = NewMainScreen(a.jiraPort, a.configPort, a.user)
+			a.mainScreen = NewMainScreen(a.jiraPort, a.configPort, a.user, a.config, a.statuses)
 		}
 		return a.mainScreen.Init()
 	}
@@ -199,8 +214,8 @@ func (a *App) View() string {
 }
 
 // NewMainScreen creates a new main screen.
-func NewMainScreen(jiraPort domain.JiraPort, configPort domain.ConfigPort, user *domain.User) tea.Model {
-	return NewMainScreenModel(jiraPort, configPort, user)
+func NewMainScreen(jiraPort domain.JiraPort, configPort domain.ConfigPort, user *domain.User, cfg *domain.Config, statuses []string) tea.Model {
+	return NewMainScreenModel(jiraPort, configPort, user, cfg, statuses)
 }
 
 // placeholderScreen is a temporary screen implementation.

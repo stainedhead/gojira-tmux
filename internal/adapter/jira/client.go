@@ -102,6 +102,45 @@ func (c *Client) GetIssue(ctx context.Context, key string) (*domain.Issue, error
 	return c.convertIssue(result), nil
 }
 
+// ListStatuses returns all available issue status names from the Jira instance.
+func (c *Client) ListStatuses(ctx context.Context) ([]string, error) {
+	statusURL := fmt.Sprintf("%s/rest/api/3/status", c.baseURL)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, statusURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.SetBasicAuth(c.username, c.token)
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("Jira API error (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	var result []struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	names := make([]string, 0, len(result))
+	for _, s := range result {
+		if s.Name != "" {
+			names = append(names, s.Name)
+		}
+	}
+	return names, nil
+}
+
 // GetIssueComments retrieves comments for an issue.
 func (c *Client) GetIssueComments(ctx context.Context, key string) ([]domain.Comment, error) {
 	issue, err := c.GetIssue(ctx, key)

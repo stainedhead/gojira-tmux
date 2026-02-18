@@ -68,18 +68,18 @@ func TestJQLBuilder_Build(t *testing.T) {
 				{Key: "PROJ", Name: "Project"},
 			},
 			team: []domain.TeamMember{},
-			want: `project IN ("PROJ") AND status = "Open" ORDER BY updated DESC`,
+			want: `project IN ("PROJ") AND status in ("Open") ORDER BY updated DESC`,
 		},
 		{
-			name: "status filter - Ready",
+			name: "status filter - In Progress",
 			filter: domain.IssueFilter{
-				Status: "Ready",
+				Status: "In Progress",
 			},
 			projects: []domain.Project{
 				{Key: "PROJ", Name: "Project"},
 			},
 			team: []domain.TeamMember{},
-			want: `project IN ("PROJ") AND status = "Ready for Development" ORDER BY updated DESC`,
+			want: `project IN ("PROJ") AND status in ("In Progress") ORDER BY updated DESC`,
 		},
 		{
 			name: "status filter - All (no filter)",
@@ -105,7 +105,7 @@ func TestJQLBuilder_Build(t *testing.T) {
 			team: []domain.TeamMember{
 				{Name: "John Doe", Email: "john@example.com"},
 			},
-			want: `project = "PROJ" AND assignee = "john@example.com" AND status = "Open" ORDER BY updated DESC`,
+			want: `project = "PROJ" AND assignee = "john@example.com" AND status in ("Open") ORDER BY updated DESC`,
 		},
 		{
 			name: "-All- project filter",
@@ -217,24 +217,27 @@ func TestJQLBuilder_EscapeSpecialCharacters(t *testing.T) {
 	}
 }
 
-func TestStatusMapping(t *testing.T) {
+func TestJQLBuilder_StatusPassthrough(t *testing.T) {
+	// Status values are passed directly to JQL without mapping - they come from Jira API.
 	tests := []struct {
-		uiStatus  string
-		jqlStatus string
+		status string
+		want   string
 	}{
-		{"Open", "Open"},
-		{"Ready", "Ready for Development"},
-		{"In Test", "In Test"},
-		{"Done", "Done"},
-		{"All", ""},
-		{"", ""},
+		{"Open", `project IN ("PROJ") AND status in ("Open") ORDER BY updated DESC`},
+		{"In Progress", `project IN ("PROJ") AND status in ("In Progress") ORDER BY updated DESC`},
+		{"Done", `project IN ("PROJ") AND status in ("Done") ORDER BY updated DESC`},
+		{"All", `project IN ("PROJ") ORDER BY updated DESC`},
+		{"", `project IN ("PROJ") ORDER BY updated DESC`},
 	}
 
+	projects := []domain.Project{{Key: "PROJ", Name: "Project"}}
+	builder := jira.NewJQLBuilder(projects, nil)
+
 	for _, tt := range tests {
-		t.Run(tt.uiStatus, func(t *testing.T) {
-			got := jira.MapStatus(tt.uiStatus)
-			if got != tt.jqlStatus {
-				t.Errorf("MapStatus(%q) = %q, want %q", tt.uiStatus, got, tt.jqlStatus)
+		t.Run(tt.status, func(t *testing.T) {
+			got := builder.Build(domain.IssueFilter{Status: tt.status})
+			if got != tt.want {
+				t.Errorf("Build(Status=%q) = %q\nwant %q", tt.status, got, tt.want)
 			}
 		})
 	}

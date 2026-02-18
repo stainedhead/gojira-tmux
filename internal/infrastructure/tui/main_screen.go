@@ -29,6 +29,7 @@ const (
 type MainScreen struct {
 	jiraPort   domain.JiraPort
 	configPort domain.ConfigPort
+	cfg        *domain.Config
 	user       *domain.User
 
 	filterBar       *FilterBar
@@ -49,7 +50,9 @@ type MainScreen struct {
 }
 
 // NewMainScreenModel creates a new main screen.
-func NewMainScreenModel(jiraPort domain.JiraPort, configPort domain.ConfigPort, user *domain.User) *MainScreen {
+// cfg is the current application config (used to restore last filter and persist changes).
+// statuses is the list of Jira status names to populate the status filter.
+func NewMainScreenModel(jiraPort domain.JiraPort, configPort domain.ConfigPort, user *domain.User, cfg *domain.Config, statuses []string) *MainScreen {
 	// Get team and projects from config
 	var team []domain.TeamMember
 	var projects []domain.Project
@@ -58,10 +61,22 @@ func NewMainScreenModel(jiraPort domain.JiraPort, configPort domain.ConfigPort, 
 		projects = configPort.GetProjects()
 	}
 
-	filterBar := NewFilterBar(team, projects)
+	filterBar := NewFilterBar(team, projects, statuses)
 	table := NewTicketsTable()
 	propertiesPanel := NewPropertiesPanel()
 	commentsPanel := NewCommentsPanel()
+
+	// Restore last saved filter if available
+	if cfg != nil {
+		saved := cfg.LastFilter
+		if saved.Assignee != "" || saved.Project != "" || saved.Status != "" {
+			filterBar.SetFilter(domain.IssueFilter{
+				Assignee: saved.Assignee,
+				Project:  saved.Project,
+				Status:   saved.Status,
+			})
+		}
+	}
 
 	// Start with table focused
 	filterBar.Blur()
@@ -69,15 +84,20 @@ func NewMainScreenModel(jiraPort domain.JiraPort, configPort domain.ConfigPort, 
 	propertiesPanel.Blur()
 	commentsPanel.Blur()
 
+	// Capture the restored filter so initial loadIssues uses it
+	initialFilter := filterBar.GetFilter()
+
 	return &MainScreen{
 		jiraPort:        jiraPort,
 		configPort:      configPort,
+		cfg:             cfg,
 		user:            user,
 		filterBar:       filterBar,
 		table:           table,
 		propertiesPanel: propertiesPanel,
 		commentsPanel:   commentsPanel,
 		focus:           MainFocusTable,
+		filter:          initialFilter,
 		keys:            DefaultKeyMap(),
 	}
 }
@@ -167,11 +187,16 @@ func (s *MainScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			s.setFocus(MainFocusFilter)
 			return s, nil
 		case "tab":
-			// Cycle focus
+			// Absorb tab while filter dropdown is open
+			if s.focus == MainFocusFilter && s.filterBar.DropdownOpen() {
+				return s, nil
+			}
 			s.cycleFocus()
 			return s, nil
 		case "shift+tab":
-			// Reverse cycle focus
+			if s.focus == MainFocusFilter && s.filterBar.DropdownOpen() {
+				return s, nil
+			}
 			s.cycleFocusReverse()
 			return s, nil
 		case "esc":
@@ -184,6 +209,11 @@ func (s *MainScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return s, nil
 			}
 			if s.focus == MainFocusFilter {
+				if s.filterBar.DropdownOpen() {
+					// Route esc to filter bar to close the dropdown
+					s.filterBar, _ = s.filterBar.Update(msg)
+					return s, nil
+				}
 				s.setFocus(MainFocusTable)
 				return s, nil
 			}
@@ -227,7 +257,7 @@ func (s *MainScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case FilterChangedMsg:
 		s.filter = msg.Filter
-		return s, s.loadIssues()
+		return s, tea.Batch(s.loadIssues(), s.saveFilter(msg.Filter))
 	}
 
 	// Route to focused component
@@ -469,6 +499,23 @@ func (s *MainScreen) renderFooter(b *strings.Builder) {
 	}
 	b.WriteString("\n")
 	b.WriteString(help)
+}
+
+// saveFilter persists the current filter state to the config file non-blocking.
+func (s *MainScreen) saveFilter(filter domain.IssueFilter) tea.Cmd {
+	if s.configPort == nil || s.cfg == nil {
+		return nil
+	}
+	s.cfg.LastFilter = domain.FilterState{
+		Assignee: filter.Assignee,
+		Project:  filter.Project,
+		Status:   filter.Status,
+	}
+	cfg := s.cfg
+	return func() tea.Msg {
+		_ = s.configPort.Save(cfg) // silently ignore errors - non-critical
+		return nil
+	}
 }
 
 func formatCount(n int) string {

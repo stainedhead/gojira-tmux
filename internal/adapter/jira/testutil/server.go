@@ -38,18 +38,21 @@ type MockServer struct {
 	t  testing.TB
 
 	// Response configuration
-	searchResponse   json.RawMessage
-	searchStatus     int
-	myselfResponse   json.RawMessage
-	myselfStatus     int
-	issueResponses   map[string]json.RawMessage // keyed by issue key
-	issueStatus      int
-	paginatedSearch  map[string]json.RawMessage // keyed by nextPageToken value ("" = first page)
+	searchResponse  json.RawMessage
+	searchStatus    int
+	myselfResponse  json.RawMessage
+	myselfStatus    int
+	issueResponses  map[string]json.RawMessage // keyed by issue key
+	issueStatus     int
+	paginatedSearch map[string]json.RawMessage // keyed by nextPageToken value ("" = first page)
+	statusResponse  json.RawMessage
+	statusStatus    int
 
 	// Request tracking
-	searchRequests  []RecordedRequest
-	myselfRequests  []RecordedRequest
-	issueRequests   []RecordedRequest
+	searchRequests []RecordedRequest
+	myselfRequests []RecordedRequest
+	issueRequests  []RecordedRequest
+	statusRequests []RecordedRequest
 
 	// Auth configuration
 	expectedUser string
@@ -69,19 +72,21 @@ type RecordedRequest struct {
 // and /rest/api/3/issue/{key} routes.
 func NewMockServer(t testing.TB) *MockServer {
 	ms := &MockServer{
-		t:              t,
-		searchStatus:   http.StatusOK,
-		myselfStatus:   http.StatusOK,
-		issueStatus:    http.StatusOK,
-		issueResponses: make(map[string]json.RawMessage),
+		t:               t,
+		searchStatus:    http.StatusOK,
+		myselfStatus:    http.StatusOK,
+		issueStatus:     http.StatusOK,
+		statusStatus:    http.StatusOK,
+		issueResponses:  make(map[string]json.RawMessage),
 		paginatedSearch: make(map[string]json.RawMessage),
-		expectedUser:   "test@example.com",
-		expectedPass:   "test-token",
+		expectedUser:    "test@example.com",
+		expectedPass:    "test-token",
 	}
 
 	// Set default responses
 	ms.searchResponse = TwoIssueSearchResponse()
 	ms.myselfResponse = DefaultMyselfResponse()
+	ms.statusResponse = StatusListResponse("To Do", "In Progress", "In Review", "Done")
 
 	ms.Server = httptest.NewServer(http.HandlerFunc(ms.handler))
 	return ms
@@ -106,6 +111,9 @@ func (ms *MockServer) handler(w http.ResponseWriter, r *http.Request) {
 	case r.URL.Path == V3MyselfPath:
 		ms.myselfRequests = append(ms.myselfRequests, recorded)
 		ms.handleMyself(w, r)
+	case r.URL.Path == V3StatusPath:
+		ms.statusRequests = append(ms.statusRequests, recorded)
+		ms.handleStatus(w, r)
 	case strings.HasPrefix(r.URL.Path, V3IssuePath):
 		ms.issueRequests = append(ms.issueRequests, recorded)
 		ms.handleIssue(w, r)
@@ -151,6 +159,20 @@ func (ms *MockServer) handleMyself(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(ms.myselfStatus)
 	}
 	w.Write(ms.myselfResponse)
+}
+
+func (ms *MockServer) handleStatus(w http.ResponseWriter, r *http.Request) {
+	if !ms.checkAuth(w, r) {
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if ms.statusStatus != http.StatusOK {
+		w.WriteHeader(ms.statusStatus)
+		w.Write(ErrorResponse("Status endpoint error"))
+		return
+	}
+	w.Write(ms.statusResponse)
 }
 
 func (ms *MockServer) handleIssue(w http.ResponseWriter, r *http.Request) {
@@ -246,6 +268,21 @@ func (ms *MockServer) SetIssueResponse(key string, response json.RawMessage) {
 	ms.issueStatus = http.StatusOK
 }
 
+// SetStatusResponse configures the status endpoint to return the given JSON.
+func (ms *MockServer) SetStatusResponse(response json.RawMessage) {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	ms.statusResponse = response
+	ms.statusStatus = http.StatusOK
+}
+
+// SetStatusError configures the status endpoint to return an error.
+func (ms *MockServer) SetStatusError(status int) {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	ms.statusStatus = status
+}
+
 // SetIssueError configures the issue endpoint to return an error for all keys.
 func (ms *MockServer) SetIssueError(status int) {
 	ms.mu.Lock()
@@ -325,6 +362,7 @@ func (ms *MockServer) Reset() {
 	ms.searchRequests = nil
 	ms.myselfRequests = nil
 	ms.issueRequests = nil
+	ms.statusRequests = nil
 	ms.searchResponse = TwoIssueSearchResponse()
 	ms.searchStatus = http.StatusOK
 	ms.myselfResponse = DefaultMyselfResponse()
@@ -332,6 +370,8 @@ func (ms *MockServer) Reset() {
 	ms.issueResponses = make(map[string]json.RawMessage)
 	ms.issueStatus = http.StatusOK
 	ms.paginatedSearch = make(map[string]json.RawMessage)
+	ms.statusResponse = StatusListResponse("To Do", "In Progress", "In Review", "Done")
+	ms.statusStatus = http.StatusOK
 }
 
 // --- Helper functions for test config ---
