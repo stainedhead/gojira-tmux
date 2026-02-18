@@ -25,8 +25,8 @@ type TicketsTable struct {
 // NewTicketsTable creates a new tickets table.
 func NewTicketsTable() *TicketsTable {
 	columns := []table.Column{
-		{Title: "   ", Width: 3},
-		{Title: "Key", Width: 12},
+		{Title: "     ", Width: 5},
+		{Title: "Key", Width: 15},
 		{Title: "Summary", Width: 50},
 		{Title: "Status", Width: 15},
 		{Title: "Priority", Width: 8},
@@ -100,8 +100,8 @@ func (t *TicketsTable) getAttentionIndicator(issue domain.Issue) string {
 		}
 		return Styles.DotEmpty.String()
 	}
-	return dot(issue.HasStaleIndicator(), Styles.DotRed) +
-		dot(issue.HasNoDueDateIndicator(), Styles.DotYellow) +
+	return dot(issue.HasStaleIndicator(), Styles.DotRed) + " " +
+		dot(issue.HasNoDueDateIndicator(), Styles.DotYellow) + " " +
 		dot(issue.HasOverdueIndicator(), Styles.DotCyan)
 }
 
@@ -124,7 +124,7 @@ func (t *TicketsTable) SetSize(width, height int) {
 	// Fixed cols: indicators + Key + Status + Priority + Assignee + DueDate + LastComment + Labels + padding
 	cols := t.table.Columns()
 	if len(cols) > 2 {
-		fixedWidth := 3 + 12 + 15 + 8 + 18 + 10 + 12 + 18 + 20 // columns + padding
+		fixedWidth := 5 + 15 + 15 + 8 + 18 + 10 + 12 + 18 + 20 // columns + padding
 		summaryWidth := width - fixedWidth
 		if summaryWidth < 20 {
 			summaryWidth = 20
@@ -245,12 +245,14 @@ func FormatIssueRow(issue domain.Issue, width int) string {
 		return Styles.DotEmpty.String()
 	}
 	b.WriteString(dot(issue.HasStaleIndicator(), Styles.DotRed))
+	b.WriteString(" ")
 	b.WriteString(dot(issue.HasNoDueDateIndicator(), Styles.DotYellow))
+	b.WriteString(" ")
 	b.WriteString(dot(issue.HasOverdueIndicator(), Styles.DotCyan))
 	b.WriteString(" ")
 
 	// Key
-	key := fmt.Sprintf("%-12s", issue.Key)
+	key := fmt.Sprintf("%-15s", issue.Key)
 	b.WriteString(key)
 	b.WriteString(" ")
 
