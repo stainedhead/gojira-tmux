@@ -25,7 +25,7 @@ type TicketsTable struct {
 // NewTicketsTable creates a new tickets table.
 func NewTicketsTable() *TicketsTable {
 	columns := []table.Column{
-		{Title: "        ", Width: 8},
+		{Title: "          ", Width: 10},
 		{Title: "Key", Width: 15},
 		{Title: "Summary", Width: 50},
 		{Title: "Status", Width: 15},
@@ -86,23 +86,25 @@ func (t *TicketsTable) SetIssues(issues []domain.Issue) {
 	}
 
 	t.table.SetRows(rows)
+	t.table.GotoTop()
 }
 
 // getAttentionIndicator returns three independent indicator circles for an issue.
 // Each circle is filled (●) when its condition is active, empty (○) otherwise.
-// Position 1 (red):    Stale — assignee inactive 14+ days
-// Position 2 (yellow): No Due Date — due date not set
-// Position 3 (cyan):   Overdue — due date is in the past
+// Plain text (no ANSI codes) is used so the bubbles table measures width correctly.
+// Position 1: Stale — assignee inactive 14+ days
+// Position 2: No Due Date — due date not set
+// Position 3: Overdue — due date is in the past
 func (t *TicketsTable) getAttentionIndicator(issue domain.Issue) string {
-	dot := func(active bool, style lipgloss.Style) string {
+	dot := func(active bool) string {
 		if active {
-			return style.String()
+			return "●"
 		}
-		return Styles.DotEmpty.String()
+		return "○"
 	}
-	return dot(issue.HasStaleIndicator(), Styles.DotRed) + " " +
-		dot(issue.HasNoDueDateIndicator(), Styles.DotYellow) + " " +
-		dot(issue.HasOverdueIndicator(), Styles.DotCyan)
+	return dot(issue.HasStaleIndicator()) + " " +
+		dot(issue.HasNoDueDateIndicator()) + " " +
+		dot(issue.HasOverdueIndicator())
 }
 
 // SelectedIssue returns the currently selected issue.
@@ -124,7 +126,7 @@ func (t *TicketsTable) SetSize(width, height int) {
 	// Fixed cols: indicators + Key + Status + Priority + Assignee + DueDate + LastComment + Labels + padding
 	cols := t.table.Columns()
 	if len(cols) > 2 {
-		fixedWidth := 8 + 15 + 15 + 8 + 18 + 10 + 12 + 18 + 20 // columns + padding
+		fixedWidth := 10 + 15 + 15 + 8 + 18 + 10 + 12 + 18 + 20 // columns + padding
 		summaryWidth := width - fixedWidth
 		if summaryWidth < 20 {
 			summaryWidth = 20

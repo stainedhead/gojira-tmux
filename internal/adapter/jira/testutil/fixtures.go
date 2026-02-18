@@ -7,10 +7,11 @@ import (
 
 // V3 API endpoint paths.
 const (
-	V3SearchPath = "/rest/api/3/search/jql"
-	V3MyselfPath = "/rest/api/3/myself"
-	V3IssuePath  = "/rest/api/3/issue/"
-	V3StatusPath = "/rest/api/3/status"
+	V3SearchPath         = "/rest/api/3/search/jql"
+	V3MyselfPath         = "/rest/api/3/myself"
+	V3IssuePath          = "/rest/api/3/issue/"
+	V3StatusPath         = "/rest/api/3/status"
+	V3ProjectStatussPath = "/rest/api/3/project/" // suffix: {key}/statuses
 )
 
 // MyselfResponse returns a realistic v3 /myself JSON response.
@@ -246,6 +247,52 @@ func StatusListResponse(names ...string) json.RawMessage {
 		}
 	}
 	b, _ := json.Marshal(statuses)
+	return b
+}
+
+// ProjectStatusesResponse returns a /rest/api/3/project/{key}/statuses response.
+// It wraps the given status names into a single issue-type entry.
+func ProjectStatusesResponse(names ...string) json.RawMessage {
+	statuses := make([]map[string]interface{}, len(names))
+	for i, name := range names {
+		statuses[i] = map[string]interface{}{
+			"id":   fmt.Sprintf("%d", i+1),
+			"name": name,
+		}
+	}
+	issueTypes := []map[string]interface{}{
+		{
+			"id":       "1",
+			"name":     "Story",
+			"statuses": statuses,
+		},
+	}
+	b, _ := json.Marshal(issueTypes)
+	return b
+}
+
+// ProjectStatusesMultiTypeResponse returns a /rest/api/3/project/{key}/statuses
+// response with multiple issue types sharing some statuses (to test deduplication).
+func ProjectStatusesMultiTypeResponse() json.RawMessage {
+	issueTypes := []map[string]interface{}{
+		{
+			"id":   "1",
+			"name": "Story",
+			"statuses": []map[string]interface{}{
+				{"id": "1", "name": "To Do"},
+				{"id": "2", "name": "In Progress"},
+			},
+		},
+		{
+			"id":   "2",
+			"name": "Bug",
+			"statuses": []map[string]interface{}{
+				{"id": "2", "name": "In Progress"},
+				{"id": "3", "name": "Done"},
+			},
+		},
+	}
+	b, _ := json.Marshal(issueTypes)
 	return b
 }
 

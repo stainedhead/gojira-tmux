@@ -217,6 +217,70 @@ func TestJQLBuilder_EscapeSpecialCharacters(t *testing.T) {
 	}
 }
 
+func TestJQLBuilder_OpenSentinel(t *testing.T) {
+	projects := []domain.Project{{Key: "PROJ", Name: "Project"}}
+	builder := jira.NewJQLBuilder(projects, nil)
+
+	got := builder.Build(domain.IssueFilter{Status: "-Open-"})
+	want := `project IN ("PROJ") AND status in ("Ready for work", "In Progress", "Ready for review") ORDER BY updated DESC`
+	if got != want {
+		t.Errorf("Build(Status=-Open-)\ngot  %q\nwant %q", got, want)
+	}
+}
+
+func TestJQLBuilder_TeamSentinel(t *testing.T) {
+	projects := []domain.Project{{Key: "PROJ", Name: "Project"}}
+	team := []domain.TeamMember{
+		{Name: "Alice", Email: "alice@example.com"},
+		{Name: "Bob", Email: "bob@example.com"},
+	}
+	builder := jira.NewJQLBuilder(projects, team)
+
+	got := builder.Build(domain.IssueFilter{Assignee: "-Team-"})
+	want := `project IN ("PROJ") AND assignee in ("alice@example.com", "bob@example.com") ORDER BY updated DESC`
+	if got != want {
+		t.Errorf("Build(Assignee=-Team-)\ngot  %q\nwant %q", got, want)
+	}
+}
+
+func TestJQLBuilder_NotTeamSentinel(t *testing.T) {
+	projects := []domain.Project{{Key: "PROJ", Name: "Project"}}
+	team := []domain.TeamMember{
+		{Name: "Alice", Email: "alice@example.com"},
+		{Name: "Bob", Email: "bob@example.com"},
+	}
+	builder := jira.NewJQLBuilder(projects, team)
+
+	got := builder.Build(domain.IssueFilter{Assignee: "-Not Team-"})
+	want := `project IN ("PROJ") AND assignee not in ("alice@example.com", "bob@example.com") ORDER BY updated DESC`
+	if got != want {
+		t.Errorf("Build(Assignee=-Not Team-)\ngot  %q\nwant %q", got, want)
+	}
+}
+
+func TestJQLBuilder_TeamSentinel_EmptyTeam(t *testing.T) {
+	projects := []domain.Project{{Key: "PROJ", Name: "Project"}}
+	builder := jira.NewJQLBuilder(projects, nil)
+
+	// -Team- with no team members → no assignee condition (treated as no filter)
+	got := builder.Build(domain.IssueFilter{Assignee: "-Team-"})
+	want := `project IN ("PROJ") ORDER BY updated DESC`
+	if got != want {
+		t.Errorf("Build(Assignee=-Team-, empty team)\ngot  %q\nwant %q", got, want)
+	}
+}
+
+func TestJQLBuilder_NotTeamSentinel_EmptyTeam(t *testing.T) {
+	projects := []domain.Project{{Key: "PROJ", Name: "Project"}}
+	builder := jira.NewJQLBuilder(projects, nil)
+
+	got := builder.Build(domain.IssueFilter{Assignee: "-Not Team-"})
+	want := `project IN ("PROJ") ORDER BY updated DESC`
+	if got != want {
+		t.Errorf("Build(Assignee=-Not Team-, empty team)\ngot  %q\nwant %q", got, want)
+	}
+}
+
 func TestJQLBuilder_StatusPassthrough(t *testing.T) {
 	// Status values are passed directly to JQL without mapping - they come from Jira API.
 	tests := []struct {

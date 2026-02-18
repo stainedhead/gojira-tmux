@@ -46,11 +46,15 @@ type FilterBar struct {
 var defaultFallbackStatuses = []string{"To Do", "In Progress", "In Review", "Done"}
 
 // NewFilterBar creates a new filter bar.
-// statuses contains the Jira status names (e.g. from ListStatuses). "All" is prepended automatically.
+// statuses contains the Jira status names (e.g. from ListStatuses). "All" and "-Open-" are prepended automatically.
 // If statuses is empty, a built-in fallback list is used.
 func NewFilterBar(team []domain.TeamMember, projects []domain.Project, statuses []string) *FilterBar {
-	// Build member options using DisplayName for alias support
+	// Build member options using DisplayName for alias support.
+	// Synthetic group options are inserted after "-All-" when team is non-empty.
 	members := []string{"-All-"}
+	if len(team) > 0 {
+		members = append(members, "-Team-", "-Not Team-")
+	}
 	for _, m := range team {
 		members = append(members, m.DisplayName())
 	}
@@ -61,17 +65,7 @@ func NewFilterBar(team []domain.TeamMember, projects []domain.Project, statuses 
 		projectOpts = append(projectOpts, p.Key)
 	}
 
-	// Build status options: always start with "All", then the provided names
-	statusOpts := []string{"All"}
-	src := statuses
-	if len(src) == 0 {
-		src = defaultFallbackStatuses
-	}
-	for _, s := range src {
-		if s != "All" {
-			statusOpts = append(statusOpts, s)
-		}
-	}
+	statusOpts := buildStatusOptions(statuses)
 
 	return &FilterBar{
 		focus:    FilterFocusMember,
@@ -80,6 +74,39 @@ func NewFilterBar(team []domain.TeamMember, projects []domain.Project, statuses 
 		projects: projectOpts,
 		statuses: statusOpts,
 	}
+}
+
+// buildStatusOptions constructs the status option list from raw status names.
+// Always: ["All", "-Open-", ...real statuses...]
+func buildStatusOptions(statuses []string) []string {
+	src := statuses
+	if len(src) == 0 {
+		src = defaultFallbackStatuses
+	}
+	opts := []string{"All", "-Open-"}
+	for _, s := range src {
+		if s != "All" && s != "-Open-" {
+			opts = append(opts, s)
+		}
+	}
+	return opts
+}
+
+// SetStatuses replaces the status option list.
+// If the currently selected status exists in the new list its index is preserved;
+// otherwise the selection resets to index 0 ("All").
+func (f *FilterBar) SetStatuses(statuses []string) {
+	current := f.statuses[f.statusIdx]
+	f.statuses = buildStatusOptions(statuses)
+
+	// Try to keep the current selection
+	for i, s := range f.statuses {
+		if s == current {
+			f.statusIdx = i
+			return
+		}
+	}
+	f.statusIdx = 0
 }
 
 // Focus sets the filter bar as focused.

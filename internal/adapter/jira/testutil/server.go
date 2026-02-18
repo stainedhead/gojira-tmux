@@ -38,21 +38,24 @@ type MockServer struct {
 	t  testing.TB
 
 	// Response configuration
-	searchResponse  json.RawMessage
-	searchStatus    int
-	myselfResponse  json.RawMessage
-	myselfStatus    int
-	issueResponses  map[string]json.RawMessage // keyed by issue key
-	issueStatus     int
-	paginatedSearch map[string]json.RawMessage // keyed by nextPageToken value ("" = first page)
-	statusResponse  json.RawMessage
-	statusStatus    int
+	searchResponse          json.RawMessage
+	searchStatus            int
+	myselfResponse          json.RawMessage
+	myselfStatus            int
+	issueResponses          map[string]json.RawMessage // keyed by issue key
+	issueStatus             int
+	paginatedSearch         map[string]json.RawMessage // keyed by nextPageToken value ("" = first page)
+	statusResponse          json.RawMessage
+	statusStatus            int
+	projectStatusesResponse map[string]json.RawMessage // keyed by project key
+	projectStatusesStatus   int
 
 	// Request tracking
-	searchRequests []RecordedRequest
-	myselfRequests []RecordedRequest
-	issueRequests  []RecordedRequest
-	statusRequests []RecordedRequest
+	searchRequests          []RecordedRequest
+	myselfRequests          []RecordedRequest
+	issueRequests           []RecordedRequest
+	statusRequests          []RecordedRequest
+	projectStatusesRequests []RecordedRequest
 
 	// Auth configuration
 	expectedUser string
@@ -72,15 +75,17 @@ type RecordedRequest struct {
 // and /rest/api/3/issue/{key} routes.
 func NewMockServer(t testing.TB) *MockServer {
 	ms := &MockServer{
-		t:               t,
-		searchStatus:    http.StatusOK,
-		myselfStatus:    http.StatusOK,
-		issueStatus:     http.StatusOK,
-		statusStatus:    http.StatusOK,
-		issueResponses:  make(map[string]json.RawMessage),
-		paginatedSearch: make(map[string]json.RawMessage),
-		expectedUser:    "test@example.com",
-		expectedPass:    "test-token",
+		t:                       t,
+		searchStatus:            http.StatusOK,
+		myselfStatus:            http.StatusOK,
+		issueStatus:             http.StatusOK,
+		statusStatus:            http.StatusOK,
+		projectStatusesStatus:   http.StatusOK,
+		issueResponses:          make(map[string]json.RawMessage),
+		paginatedSearch:         make(map[string]json.RawMessage),
+		projectStatusesResponse: make(map[string]json.RawMessage),
+		expectedUser:            "test@example.com",
+		expectedPass:            "test-token",
 	}
 
 	// Set default responses
@@ -114,6 +119,9 @@ func (ms *MockServer) handler(w http.ResponseWriter, r *http.Request) {
 	case r.URL.Path == V3StatusPath:
 		ms.statusRequests = append(ms.statusRequests, recorded)
 		ms.handleStatus(w, r)
+	case strings.HasPrefix(r.URL.Path, V3ProjectStatussPath) && strings.HasSuffix(r.URL.Path, "/statuses"):
+		ms.projectStatusesRequests = append(ms.projectStatusesRequests, recorded)
+		ms.handleProjectStatuses(w, r)
 	case strings.HasPrefix(r.URL.Path, V3IssuePath):
 		ms.issueRequests = append(ms.issueRequests, recorded)
 		ms.handleIssue(w, r)
@@ -173,6 +181,31 @@ func (ms *MockServer) handleStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Write(ms.statusResponse)
+}
+
+func (ms *MockServer) handleProjectStatuses(w http.ResponseWriter, r *http.Request) {
+	if !ms.checkAuth(w, r) {
+		return
+	}
+
+	// Extract project key from path: /rest/api/3/project/{key}/statuses
+	trimmed := strings.TrimPrefix(r.URL.Path, V3ProjectStatussPath)
+	projectKey := strings.TrimSuffix(trimmed, "/statuses")
+
+	w.Header().Set("Content-Type", "application/json")
+	if ms.projectStatusesStatus != http.StatusOK {
+		w.WriteHeader(ms.projectStatusesStatus)
+		w.Write(ErrorResponse("Project statuses endpoint error"))
+		return
+	}
+
+	if resp, ok := ms.projectStatusesResponse[projectKey]; ok {
+		w.Write(resp)
+		return
+	}
+
+	// Default: return empty array
+	w.Write([]byte("[]"))
 }
 
 func (ms *MockServer) handleIssue(w http.ResponseWriter, r *http.Request) {
@@ -283,6 +316,21 @@ func (ms *MockServer) SetStatusError(status int) {
 	ms.statusStatus = status
 }
 
+// SetProjectStatusesResponse configures a response for a specific project key.
+func (ms *MockServer) SetProjectStatusesResponse(key string, response json.RawMessage) {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	ms.projectStatusesResponse[key] = response
+	ms.projectStatusesStatus = http.StatusOK
+}
+
+// SetProjectStatusesError configures the project statuses endpoint to return an error for all keys.
+func (ms *MockServer) SetProjectStatusesError(status int) {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	ms.projectStatusesStatus = status
+}
+
 // SetIssueError configures the issue endpoint to return an error for all keys.
 func (ms *MockServer) SetIssueError(status int) {
 	ms.mu.Lock()
@@ -363,6 +411,7 @@ func (ms *MockServer) Reset() {
 	ms.myselfRequests = nil
 	ms.issueRequests = nil
 	ms.statusRequests = nil
+	ms.projectStatusesRequests = nil
 	ms.searchResponse = TwoIssueSearchResponse()
 	ms.searchStatus = http.StatusOK
 	ms.myselfResponse = DefaultMyselfResponse()
@@ -372,6 +421,8 @@ func (ms *MockServer) Reset() {
 	ms.paginatedSearch = make(map[string]json.RawMessage)
 	ms.statusResponse = StatusListResponse("To Do", "In Progress", "In Review", "Done")
 	ms.statusStatus = http.StatusOK
+	ms.projectStatusesResponse = make(map[string]json.RawMessage)
+	ms.projectStatusesStatus = http.StatusOK
 }
 
 // --- Helper functions for test config ---

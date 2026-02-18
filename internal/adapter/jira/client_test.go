@@ -547,6 +547,94 @@ func TestClient_ListStatuses_ServerError(t *testing.T) {
 	}
 }
 
+// --- ListProjectStatuses Tests ---
+
+func TestClient_ListProjectStatuses_ReturnsNames(t *testing.T) {
+	srv := testutil.NewMockServer(t)
+	defer srv.Close()
+
+	srv.SetProjectStatusesResponse("MYPROJ", testutil.ProjectStatusesResponse("To Do", "In Progress", "Done"))
+
+	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil)
+	statuses, err := client.ListProjectStatuses(context.Background(), "MYPROJ")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(statuses) != 3 {
+		t.Fatalf("got %d statuses, want 3", len(statuses))
+	}
+	// Results are sorted
+	if statuses[0] != "Done" {
+		t.Errorf("statuses[0] = %q, want Done (sorted first)", statuses[0])
+	}
+}
+
+func TestClient_ListProjectStatuses_DeduplicatesAcrossIssueTypes(t *testing.T) {
+	srv := testutil.NewMockServer(t)
+	defer srv.Close()
+
+	srv.SetProjectStatusesResponse("MYPROJ", testutil.ProjectStatusesMultiTypeResponse())
+
+	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil)
+	statuses, err := client.ListProjectStatuses(context.Background(), "MYPROJ")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Multi-type fixture has: To Do, In Progress (x2), Done → 3 unique names
+	if len(statuses) != 3 {
+		t.Fatalf("got %d statuses, want 3 (deduplicated)", len(statuses))
+	}
+}
+
+func TestClient_ListProjectStatuses_EmptyProject(t *testing.T) {
+	srv := testutil.NewMockServer(t)
+	defer srv.Close()
+
+	// No response configured → mock returns empty array
+	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil)
+	statuses, err := client.ListProjectStatuses(context.Background(), "EMPTY")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(statuses) != 0 {
+		t.Errorf("got %d statuses, want 0", len(statuses))
+	}
+}
+
+func TestClient_ListProjectStatuses_Unauthorized(t *testing.T) {
+	srv := testutil.NewMockServer(t)
+	defer srv.Close()
+
+	srv.SetProjectStatusesResponse("MYPROJ", testutil.ProjectStatusesResponse("To Do"))
+
+	client := jira.NewClient(srv.BaseURL(), "wrong@example.com", "wrong-token", nil, nil)
+	_, err := client.ListProjectStatuses(context.Background(), "MYPROJ")
+	if err == nil {
+		t.Fatal("expected error for unauthorized request")
+	}
+	if !strings.Contains(err.Error(), "401") {
+		t.Errorf("error = %q, want to contain '401'", err.Error())
+	}
+}
+
+func TestClient_ListProjectStatuses_ServerError(t *testing.T) {
+	srv := testutil.NewMockServer(t)
+	defer srv.Close()
+
+	srv.SetProjectStatusesError(http.StatusInternalServerError)
+
+	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil)
+	_, err := client.ListProjectStatuses(context.Background(), "MYPROJ")
+	if err == nil {
+		t.Fatal("expected error for server error")
+	}
+	if !strings.Contains(err.Error(), "500") {
+		t.Errorf("error = %q, want to contain '500'", err.Error())
+	}
+}
+
 // --- Basic Auth Tests ---
 
 func TestClient_SearchIssues_SendsBasicAuth(t *testing.T) {

@@ -46,6 +46,10 @@ func (m *MockJiraPort) ListStatuses(ctx context.Context) ([]string, error) {
 	return []string{"To Do", "In Progress", "Done"}, nil
 }
 
+func (m *MockJiraPort) ListProjectStatuses(ctx context.Context, projectKey string) ([]string, error) {
+	return []string{"To Do", "In Progress", "Done"}, nil
+}
+
 func TestListIssues_Execute_Success(t *testing.T) {
 	now := time.Now()
 	mockIssues := []domain.Issue{

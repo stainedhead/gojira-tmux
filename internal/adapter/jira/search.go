@@ -68,6 +68,24 @@ func (b *JQLBuilder) buildAssigneeCondition(identifier string) string {
 		return ""
 	}
 
+	// Synthetic: match any team member
+	if identifier == "-Team-" {
+		if len(b.team) == 0 {
+			return ""
+		}
+		emails := teamEmails(b.team)
+		return fmt.Sprintf("assignee in (%s)", strings.Join(emails, ", "))
+	}
+
+	// Synthetic: exclude all team members
+	if identifier == "-Not Team-" {
+		if len(b.team) == 0 {
+			return ""
+		}
+		emails := teamEmails(b.team)
+		return fmt.Sprintf("assignee not in (%s)", strings.Join(emails, ", "))
+	}
+
 	// Find team member by name or alias
 	var member *domain.TeamMember
 	for i := range b.team {
@@ -86,11 +104,24 @@ func (b *JQLBuilder) buildAssigneeCondition(identifier string) string {
 
 // buildStatusCondition builds the status filter condition.
 // The status value is the exact Jira status name (fetched from the API).
+// The special sentinel "-Open-" maps to a multi-status "open work" condition.
 func (b *JQLBuilder) buildStatusCondition(status string) string {
 	if status == "" || status == "All" {
 		return ""
 	}
+	if status == "-Open-" {
+		return `status in ("Ready for work", "In Progress", "Ready for review")`
+	}
 	return fmt.Sprintf(`status in (%s)`, escapeJQL(status))
+}
+
+// teamEmails returns the JQL-escaped email addresses for all team members.
+func teamEmails(team []domain.TeamMember) []string {
+	emails := make([]string, len(team))
+	for i, m := range team {
+		emails[i] = escapeJQL(m.Email)
+	}
+	return emails
 }
 
 // escapeJQL escapes special characters in JQL values and wraps in quotes.

@@ -56,6 +56,10 @@ func (m *mockJiraPort) ListStatuses(_ context.Context) ([]string, error) {
 	return []string{"To Do", "In Progress", "Done"}, nil
 }
 
+func (m *mockJiraPort) ListProjectStatuses(_ context.Context, _ string) ([]string, error) {
+	return []string{"To Do", "In Progress", "Done"}, nil
+}
+
 // mockConfigPort implements domain.ConfigPort for testing.
 type mockConfigPort struct {
 	team     []domain.TeamMember

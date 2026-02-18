@@ -48,6 +48,10 @@ type MainScreen struct {
 	width           int
 	height          int
 	keys            KeyMap
+
+	// allStatuses is the full instance-level status list, used when no project
+	// is selected or as fallback when project-scoped status loading fails.
+	allStatuses []string
 }
 
 // NewMainScreenModel creates a new main screen.
@@ -105,6 +109,7 @@ func NewMainScreenModel(jiraPort domain.JiraPort, configPort domain.ConfigPort, 
 		focus:           MainFocusTable,
 		filter:          initialFilter,
 		keys:            DefaultKeyMap(),
+		allStatuses:     statuses,
 	}
 }
 
@@ -156,6 +161,22 @@ func (s *MainScreen) loadIssueDetails(key string) tea.Cmd {
 	}
 }
 
+// loadProjectStatuses fetches statuses valid for a specific project.
+// On failure it falls back to allStatuses so the filter bar stays populated.
+func (s *MainScreen) loadProjectStatuses(projectKey string) tea.Cmd {
+	allStatuses := s.allStatuses
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		statuses, err := s.jiraPort.ListProjectStatuses(ctx, projectKey)
+		if err != nil || len(statuses) == 0 {
+			return projectStatusesLoadedMsg{statuses: allStatuses}
+		}
+		return projectStatusesLoadedMsg{statuses: statuses}
+	}
+}
+
 // Internal messages
 type issuesLoadedInternalMsg struct {
 	issues []domain.Issue
@@ -171,6 +192,10 @@ type issueDetailsLoadedInternalMsg struct {
 
 type issueDetailsErrorMsg struct {
 	err error
+}
+
+type projectStatusesLoadedMsg struct {
+	statuses []string
 }
 
 // Update handles messages for the main screen.
@@ -278,8 +303,21 @@ func (s *MainScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return s, nil
 
 	case FilterChangedMsg:
+		projectChanged := s.filter.Project != msg.Filter.Project
 		s.filter = msg.Filter
-		return s, tea.Batch(s.loadIssues(), s.saveFilter(msg.Filter))
+		cmds := []tea.Cmd{s.loadIssues(), s.saveFilter(msg.Filter)}
+		if projectChanged {
+			if msg.Filter.Project == "" || msg.Filter.Project == "-All-" {
+				s.filterBar.SetStatuses(s.allStatuses)
+			} else {
+				cmds = append(cmds, s.loadProjectStatuses(msg.Filter.Project))
+			}
+		}
+		return s, tea.Batch(cmds...)
+
+	case projectStatusesLoadedMsg:
+		s.filterBar.SetStatuses(msg.statuses)
+		return s, nil
 	}
 
 	// Route to focused component
@@ -304,13 +342,14 @@ func (s *MainScreen) updateComponentSizes() {
 
 	if s.showDetails {
 		// Side-by-side layout: table on left (~60%), detail panels stacked on right (~40%)
-		contentHeight := max(s.height-12, 8)
+		// Overhead: app padding(2) + title+blank(2) + filterbar+blank(2) + count+blank(2) + footer(2) = 10
+		contentHeight := max(s.height-10, 8)
 
 		tableWidth := max(contentWidth*60/100, 40)
 		detailWidth := max(contentWidth-tableWidth, 20)
 
-		// Properties gets top half, comments gets bottom half
-		propHeight := max(contentHeight/2, 4)
+		// Properties gets 70%, comments gets 30% — properties has more fields to display
+		propHeight := max(contentHeight*7/10, 5)
 		commentHeight := max(contentHeight-propHeight, 4)
 
 		s.table.SetSize(tableWidth, max(contentHeight, 5))
@@ -318,7 +357,7 @@ func (s *MainScreen) updateComponentSizes() {
 		s.commentsPanel.SetSize(detailWidth, commentHeight)
 	} else {
 		// Full-width table
-		s.table.SetSize(contentWidth, max(s.height-12, 5))
+		s.table.SetSize(contentWidth, max(s.height-10, 5))
 	}
 }
 

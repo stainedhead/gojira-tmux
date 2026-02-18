@@ -39,6 +39,11 @@ type JiraPort interface {
 
 	// ListStatuses returns all available issue status names from the Jira instance.
 	ListStatuses(ctx context.Context) ([]string, error)
+
+	// ListProjectStatuses returns the status names valid for a specific project.
+	// It queries each issue type configured for the project and returns a deduplicated,
+	// sorted list of all status names across those issue types.
+	ListProjectStatuses(ctx context.Context, projectKey string) ([]string, error)
 }
 
 // AuthPort defines the interface for authentication operations.

@@ -250,7 +250,8 @@ func TestFilterBar_Dropdown_EnterConfirmsSelection(t *testing.T) {
 		t.Fatal("Dropdown should be open on Status")
 	}
 
-	// Move cursor down once: All→Open
+	// Move cursor down twice: All → -Open- → Open
+	fb, _ = fb.Update(tea.KeyMsg{Type: tea.KeyDown})
 	fb, _ = fb.Update(tea.KeyMsg{Type: tea.KeyDown})
 	// Confirm
 	fb, _ = fb.Update(tea.KeyMsg{Type: tea.KeyEnter})
@@ -302,5 +303,197 @@ func TestFilterBar_Dropdown_HelpTextChanges(t *testing.T) {
 	openView := fb.View()
 	if !contains(openView, "esc") {
 		t.Error("Open dropdown should show 'esc' in help text")
+	}
+}
+
+// --- -Open- sentinel tests ---
+
+func TestFilterBar_OpenSentinel_InStatusList(t *testing.T) {
+	fb := tui.NewFilterBar(
+		[]domain.TeamMember{{Name: "Alice", Email: "alice@example.com"}},
+		[]domain.Project{{Key: "PROJ", Name: "Project"}},
+		testStatuses,
+	)
+	fb.Focus()
+
+	// Tab to Status, open dropdown, check view
+	fb, _ = fb.Update(tea.KeyMsg{Type: tea.KeyTab})
+	fb, _ = fb.Update(tea.KeyMsg{Type: tea.KeyTab})
+	fb, _ = fb.Update(tea.KeyMsg{Type: tea.KeyEnter})
+
+	view := fb.View()
+	if !contains(view, "-Open-") {
+		t.Error("Status dropdown should contain -Open- sentinel")
+	}
+}
+
+func TestFilterBar_OpenSentinel_CanBeSelected(t *testing.T) {
+	fb := tui.NewFilterBar(
+		[]domain.TeamMember{{Name: "Alice", Email: "alice@example.com"}},
+		[]domain.Project{{Key: "PROJ", Name: "Project"}},
+		testStatuses,
+	)
+	fb.Focus()
+
+	// Tab to Status, open, move down once (All → -Open-), confirm
+	fb, _ = fb.Update(tea.KeyMsg{Type: tea.KeyTab})
+	fb, _ = fb.Update(tea.KeyMsg{Type: tea.KeyTab})
+	fb, _ = fb.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	fb, _ = fb.Update(tea.KeyMsg{Type: tea.KeyDown})
+	fb, _ = fb.Update(tea.KeyMsg{Type: tea.KeyEnter})
+
+	if fb.GetFilter().Status != "-Open-" {
+		t.Errorf("Status = %q, want -Open-", fb.GetFilter().Status)
+	}
+}
+
+// --- SetStatuses tests ---
+
+func TestFilterBar_SetStatuses_KeepsValidSelection(t *testing.T) {
+	fb := tui.NewFilterBar(
+		[]domain.TeamMember{{Name: "Alice", Email: "alice@example.com"}},
+		[]domain.Project{{Key: "PROJ", Name: "Project"}},
+		[]string{"In Progress", "Done"},
+	)
+
+	// Select "In Progress"
+	fb.SetFilter(domain.IssueFilter{Status: "In Progress"})
+	if fb.GetFilter().Status != "In Progress" {
+		t.Fatalf("pre-condition: status = %q, want In Progress", fb.GetFilter().Status)
+	}
+
+	// Update statuses — "In Progress" is still in the new list
+	fb.SetStatuses([]string{"To Do", "In Progress", "Closed"})
+	if fb.GetFilter().Status != "In Progress" {
+		t.Errorf("Status = %q after SetStatuses, want In Progress (preserved)", fb.GetFilter().Status)
+	}
+}
+
+func TestFilterBar_SetStatuses_ResetsInvalidSelection(t *testing.T) {
+	fb := tui.NewFilterBar(
+		[]domain.TeamMember{{Name: "Alice", Email: "alice@example.com"}},
+		[]domain.Project{{Key: "PROJ", Name: "Project"}},
+		[]string{"In Progress", "Done"},
+	)
+
+	// Select "Done"
+	fb.SetFilter(domain.IssueFilter{Status: "Done"})
+
+	// New statuses don't include "Done"
+	fb.SetStatuses([]string{"To Do", "In Progress"})
+	if fb.GetFilter().Status != "All" {
+		t.Errorf("Status = %q after SetStatuses, want All (reset)", fb.GetFilter().Status)
+	}
+}
+
+func TestFilterBar_SetStatuses_KeepsOpenSentinel(t *testing.T) {
+	fb := tui.NewFilterBar(
+		[]domain.TeamMember{{Name: "Alice", Email: "alice@example.com"}},
+		[]domain.Project{{Key: "PROJ", Name: "Project"}},
+		testStatuses,
+	)
+
+	// Select -Open-
+	fb.SetFilter(domain.IssueFilter{Status: "-Open-"})
+
+	// Replace statuses — -Open- is always injected by buildStatusOptions
+	fb.SetStatuses([]string{"To Do", "Done"})
+	if fb.GetFilter().Status != "-Open-" {
+		t.Errorf("Status = %q after SetStatuses, want -Open- (always present)", fb.GetFilter().Status)
+	}
+}
+
+func TestFilterBar_SetStatuses_OpenSentinelAlwaysPresent(t *testing.T) {
+	fb := tui.NewFilterBar(
+		[]domain.TeamMember{{Name: "Alice", Email: "alice@example.com"}},
+		[]domain.Project{{Key: "PROJ", Name: "Project"}},
+		[]string{"To Do"},
+	)
+	fb.SetStatuses([]string{"Backlog", "Released"})
+
+	// The status list must always contain "All" and "-Open-"
+	filter := fb.GetFilter()
+	if filter.Status != "All" {
+		t.Errorf("default status = %q, want All", filter.Status)
+	}
+	// Tab to Status, open dropdown, check -Open- is present
+	fb.Focus()
+	fb, _ = fb.Update(tea.KeyMsg{Type: tea.KeyTab})
+	fb, _ = fb.Update(tea.KeyMsg{Type: tea.KeyTab})
+	fb, _ = fb.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if !contains(fb.View(), "-Open-") {
+		t.Error("Status dropdown should always contain -Open-")
+	}
+}
+
+// --- -Team- / -Not Team- member tests ---
+
+func TestFilterBar_TeamSentinels_PresentWithNonEmptyTeam(t *testing.T) {
+	team := []domain.TeamMember{
+		{Name: "Alice", Email: "alice@example.com"},
+		{Name: "Bob", Email: "bob@example.com"},
+	}
+	fb := tui.NewFilterBar(team, []domain.Project{{Key: "PROJ", Name: "Project"}}, testStatuses)
+	fb.Focus()
+
+	// Open Member dropdown
+	fb, _ = fb.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	view := fb.View()
+
+	if !contains(view, "-Team-") {
+		t.Error("Member dropdown should contain -Team- when team is non-empty")
+	}
+	if !contains(view, "-Not Team-") {
+		t.Error("Member dropdown should contain -Not Team- when team is non-empty")
+	}
+}
+
+func TestFilterBar_TeamSentinels_AbsentWithEmptyTeam(t *testing.T) {
+	fb := tui.NewFilterBar(nil, []domain.Project{{Key: "PROJ", Name: "Project"}}, testStatuses)
+	fb.Focus()
+
+	fb, _ = fb.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	view := fb.View()
+
+	if contains(view, "-Team-") {
+		t.Error("Member dropdown should NOT contain -Team- when team is empty")
+	}
+	if contains(view, "-Not Team-") {
+		t.Error("Member dropdown should NOT contain -Not Team- when team is empty")
+	}
+}
+
+func TestFilterBar_TeamSentinel_CanBeSelected(t *testing.T) {
+	team := []domain.TeamMember{
+		{Name: "Alice", Email: "alice@example.com"},
+	}
+	fb := tui.NewFilterBar(team, []domain.Project{{Key: "PROJ", Name: "Project"}}, testStatuses)
+	fb.Focus()
+
+	// Open dropdown, move down once (-All- → -Team-), confirm
+	fb, _ = fb.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	fb, _ = fb.Update(tea.KeyMsg{Type: tea.KeyDown})
+	fb, _ = fb.Update(tea.KeyMsg{Type: tea.KeyEnter})
+
+	if fb.GetFilter().Assignee != "-Team-" {
+		t.Errorf("Assignee = %q, want -Team-", fb.GetFilter().Assignee)
+	}
+}
+
+func TestFilterBar_NotTeamSentinel_CanBeSelected(t *testing.T) {
+	team := []domain.TeamMember{
+		{Name: "Alice", Email: "alice@example.com"},
+	}
+	fb := tui.NewFilterBar(team, []domain.Project{{Key: "PROJ", Name: "Project"}}, testStatuses)
+	fb.Focus()
+
+	// Open dropdown, move down twice (-All- → -Team- → -Not Team-), confirm
+	fb, _ = fb.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	fb, _ = fb.Update(tea.KeyMsg{Type: tea.KeyDown})
+	fb, _ = fb.Update(tea.KeyMsg{Type: tea.KeyDown})
+	fb, _ = fb.Update(tea.KeyMsg{Type: tea.KeyEnter})
+
+	if fb.GetFilter().Assignee != "-Not Team-" {
+		t.Errorf("Assignee = %q, want -Not Team-", fb.GetFilter().Assignee)
 	}
 }

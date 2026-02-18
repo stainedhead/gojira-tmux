@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
 	"time"
 
 	"github.com/stainedhead/gojira-tmux/internal/domain"
@@ -138,6 +139,56 @@ func (c *Client) ListStatuses(ctx context.Context) ([]string, error) {
 			names = append(names, s.Name)
 		}
 	}
+	return names, nil
+}
+
+// ListProjectStatuses returns the status names valid for a specific project.
+// It queries all issue types for the project and returns a deduplicated, sorted list.
+func (c *Client) ListProjectStatuses(ctx context.Context, projectKey string) ([]string, error) {
+	statusURL := fmt.Sprintf("%s/rest/api/3/project/%s/statuses", c.baseURL, projectKey)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, statusURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.SetBasicAuth(c.username, c.token)
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("Jira API error (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	var issueTypes []struct {
+		Statuses []struct {
+			Name string `json:"name"`
+		} `json:"statuses"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&issueTypes); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	seen := make(map[string]struct{})
+	for _, it := range issueTypes {
+		for _, s := range it.Statuses {
+			if s.Name != "" {
+				seen[s.Name] = struct{}{}
+			}
+		}
+	}
+
+	names := make([]string, 0, len(seen))
+	for name := range seen {
+		names = append(names, name)
+	}
+	sort.Strings(names)
 	return names, nil
 }
 
