@@ -148,7 +148,7 @@ func TestIssue_NeedsAttention(t *testing.T) {
 			expected: domain.AttentionNone,
 		},
 		{
-			name: "no attention for non-open issue (In Test)",
+			name: "yellow dot for active non-done status (In Test) without due date",
 			issue: domain.Issue{
 				Key:     "PROJ-1",
 				Summary: "Test",
@@ -156,7 +156,30 @@ func TestIssue_NeedsAttention(t *testing.T) {
 				Created: now,
 				Updated: now,
 			},
+			expected: domain.AttentionNoDueDate,
+		},
+		{
+			name: "no attention for active status (To Do) with due date and recent update",
+			issue: domain.Issue{
+				Key:     "PROJ-1",
+				Summary: "Test",
+				Status:  "To Do",
+				DueDate: &dueDate,
+				Created: now,
+				Updated: now,
+			},
 			expected: domain.AttentionNone,
+		},
+		{
+			name: "yellow dot for In Progress without due date",
+			issue: domain.Issue{
+				Key:     "PROJ-1",
+				Summary: "Test",
+				Status:  "In Progress",
+				Created: now,
+				Updated: now,
+			},
+			expected: domain.AttentionNoDueDate,
 		},
 		{
 			name: "yellow dot for open issue without due date",
@@ -183,7 +206,7 @@ func TestIssue_NeedsAttention(t *testing.T) {
 			expected: domain.AttentionNone,
 		},
 		{
-			name: "red dot for stale open issue (assignee, no comments, 15+ days old)",
+			name: "red dot for stale open issue (assignee, no comments, 15+ days since last update)",
 			issue: domain.Issue{
 				Key:      "PROJ-1",
 				Summary:  "Test",
@@ -191,7 +214,7 @@ func TestIssue_NeedsAttention(t *testing.T) {
 				DueDate:  &dueDate,
 				Assignee: &domain.TeamMember{Name: "John", Email: "john@test.com"},
 				Created:  now.Add(-15 * 24 * time.Hour),
-				Updated:  now,
+				Updated:  now.Add(-15 * 24 * time.Hour),
 				Comments: []domain.Comment{},
 			},
 			expected: domain.AttentionStale,
@@ -205,10 +228,24 @@ func TestIssue_NeedsAttention(t *testing.T) {
 				DueDate:  nil,
 				Assignee: &domain.TeamMember{Name: "John", Email: "john@test.com"},
 				Created:  now.Add(-15 * 24 * time.Hour),
-				Updated:  now,
+				Updated:  now.Add(-15 * 24 * time.Hour),
 				Comments: []domain.Comment{},
 			},
 			expected: domain.AttentionStale,
+		},
+		{
+			name: "no red dot when Updated is recent even if Created is old (no assignee comment)",
+			issue: domain.Issue{
+				Key:      "PROJ-1",
+				Summary:  "Test",
+				Status:   "Open",
+				DueDate:  &dueDate,
+				Assignee: &domain.TeamMember{Name: "John", Email: "john@test.com"},
+				Created:  now.Add(-30 * 24 * time.Hour),
+				Updated:  now.Add(-2 * 24 * time.Hour),
+				Comments: []domain.Comment{},
+			},
+			expected: domain.AttentionNone,
 		},
 		{
 			name: "no attention for open issue with recent assignee comment",
@@ -358,6 +395,24 @@ func TestIssue_IsStale(t *testing.T) {
 			},
 			want: true,
 		},
+		{
+			name: "not stale - recent Updated even though Created is old (no comments loaded)",
+			issue: domain.Issue{
+				Assignee: &domain.TeamMember{Name: "John", Email: "john@test.com"},
+				Created:  now.Add(-30 * 24 * time.Hour),
+				Updated:  now.Add(-2 * 24 * time.Hour),
+			},
+			want: false,
+		},
+		{
+			name: "stale - both Created and Updated are old (no comments)",
+			issue: domain.Issue{
+				Assignee: &domain.TeamMember{Name: "John", Email: "john@test.com"},
+				Created:  now.Add(-20 * 24 * time.Hour),
+				Updated:  now.Add(-16 * 24 * time.Hour),
+			},
+			want: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -437,4 +492,58 @@ func TestIssue_LastAssigneeComment(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestIssue_LastCommentAt(t *testing.T) {
+	now := time.Now()
+
+	t.Run("returns nil when no comments", func(t *testing.T) {
+		issue := domain.Issue{}
+		got := issue.LastCommentAt()
+		if got != nil {
+			t.Errorf("LastCommentAt() = %v, want nil", got)
+		}
+	})
+
+	t.Run("returns nil when comments slice is empty", func(t *testing.T) {
+		issue := domain.Issue{Comments: []domain.Comment{}}
+		got := issue.LastCommentAt()
+		if got != nil {
+			t.Errorf("LastCommentAt() = %v, want nil", got)
+		}
+	})
+
+	t.Run("returns date of single comment", func(t *testing.T) {
+		expected := now.Add(-3 * 24 * time.Hour)
+		issue := domain.Issue{
+			Comments: []domain.Comment{
+				{ID: "1", Author: "Alice", Created: expected},
+			},
+		}
+		got := issue.LastCommentAt()
+		if got == nil {
+			t.Fatal("LastCommentAt() = nil, want non-nil")
+		}
+		if !got.Equal(expected) {
+			t.Errorf("LastCommentAt() = %v, want %v", got, expected)
+		}
+	})
+
+	t.Run("returns date of last comment in slice", func(t *testing.T) {
+		early := now.Add(-10 * 24 * time.Hour)
+		latest := now.Add(-1 * 24 * time.Hour)
+		issue := domain.Issue{
+			Comments: []domain.Comment{
+				{ID: "1", Author: "Alice", Created: early},
+				{ID: "2", Author: "Bob", Created: latest},
+			},
+		}
+		got := issue.LastCommentAt()
+		if got == nil {
+			t.Fatal("LastCommentAt() = nil, want non-nil")
+		}
+		if !got.Equal(latest) {
+			t.Errorf("LastCommentAt() = %v, want %v", got, latest)
+		}
+	})
 }

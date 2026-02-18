@@ -36,6 +36,7 @@ type MainScreen struct {
 	table           *TicketsTable
 	propertiesPanel *PropertiesPanel
 	commentsPanel   *CommentsPanel
+	commentsPreview *CommentsPreview
 	focus           MainFocus
 	issues          []domain.Issue
 	filter          domain.IssueFilter
@@ -65,6 +66,7 @@ func NewMainScreenModel(jiraPort domain.JiraPort, configPort domain.ConfigPort, 
 	table := NewTicketsTable()
 	propertiesPanel := NewPropertiesPanel()
 	commentsPanel := NewCommentsPanel()
+	commentsPreview := NewCommentsPreview()
 
 	// Restore last saved filter if available
 	if cfg != nil {
@@ -96,6 +98,7 @@ func NewMainScreenModel(jiraPort domain.JiraPort, configPort domain.ConfigPort, 
 		table:           table,
 		propertiesPanel: propertiesPanel,
 		commentsPanel:   commentsPanel,
+		commentsPreview: commentsPreview,
 		focus:           MainFocusTable,
 		filter:          initialFilter,
 		keys:            DefaultKeyMap(),
@@ -236,6 +239,7 @@ func (s *MainScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		s.loading = false
 		s.issues = msg.issues
 		s.table.SetIssues(msg.issues)
+		s.refreshCommentsPreview()
 		return s, nil
 
 	case issuesLoadErrorMsg:
@@ -245,9 +249,11 @@ func (s *MainScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case issueDetailsLoadedInternalMsg:
 		s.loadingDetails = false
-		s.selectedIssue = msg.issue
-		s.propertiesPanel.SetIssue(msg.issue)
-		s.commentsPanel.SetComments(msg.issue.Comments)
+		if msg.issue != nil {
+			s.selectedIssue = msg.issue
+			s.propertiesPanel.SetIssue(msg.issue)
+			s.commentsPanel.SetComments(msg.issue.Comments)
+		}
 		return s, nil
 
 	case issueDetailsErrorMsg:
@@ -267,6 +273,8 @@ func (s *MainScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		s.filterBar, cmd = s.filterBar.Update(msg)
 	case MainFocusTable:
 		s.table, cmd = s.table.Update(msg)
+		// Keep preview in sync as the cursor moves
+		s.refreshCommentsPreview()
 	case MainFocusProperties:
 		s.propertiesPanel, cmd = s.propertiesPanel.Update(msg)
 	case MainFocusComments:
@@ -275,22 +283,40 @@ func (s *MainScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return s, cmd
 }
 
+// commentsPreviewLines is the number of terminal lines the preview occupies
+// (1 header + up to previewMaxComments rows + 1 margin).
+const commentsPreviewLines = previewMaxComments + 2
+
 // updateComponentSizes updates sizes of all components based on current layout.
 func (s *MainScreen) updateComponentSizes() {
-	s.filterBar.SetWidth(s.width - 4)
+	contentWidth := max(s.width-4, 0)
+	s.filterBar.SetWidth(contentWidth)
 
 	if s.showDetails {
 		// Split view: table on left (60%), details on right (40%)
-		tableWidth := (s.width - 4) * 60 / 100
-		detailWidth := (s.width - 4) - tableWidth - 2 // -2 for gap
-		detailHeight := (s.height - 14) / 2
+		tableWidth := contentWidth * 60 / 100
+		detailWidth := max(contentWidth-tableWidth-2, 2)
+		contentHeight := max(s.height-14, 2)
+		detailHeight := max(contentHeight/2, 1)
 
-		s.table.SetSize(tableWidth, s.height-14)
+		s.table.SetSize(tableWidth, contentHeight)
 		s.propertiesPanel.SetSize(detailWidth, detailHeight)
 		s.commentsPanel.SetSize(detailWidth, detailHeight)
 	} else {
-		// Full width table
-		s.table.SetSize(s.width-4, s.height-12)
+		// List view: table above, comments preview below
+		tableHeight := max(s.height-12-commentsPreviewLines, 1)
+		s.table.SetSize(contentWidth, tableHeight)
+		s.commentsPreview.SetWidth(contentWidth)
+	}
+}
+
+// refreshCommentsPreview updates the inline comments preview to match the
+// currently selected table row. Safe to call after every table update.
+func (s *MainScreen) refreshCommentsPreview() {
+	if issue := s.table.SelectedIssue(); issue != nil {
+		s.commentsPreview.SetComments(issue.Comments)
+	} else {
+		s.commentsPreview.SetComments(nil)
 	}
 }
 
@@ -438,6 +464,9 @@ func (s *MainScreen) renderTable(b *strings.Builder) {
 	// Table
 	b.WriteString(s.table.View())
 	b.WriteString("\n")
+
+	// Inline comments preview (read-only, updates with selection)
+	b.WriteString(s.commentsPreview.View())
 }
 
 func (s *MainScreen) renderSplitView(b *strings.Builder) {

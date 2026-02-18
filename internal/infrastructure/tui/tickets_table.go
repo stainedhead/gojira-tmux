@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
@@ -27,8 +28,11 @@ func NewTicketsTable() *TicketsTable {
 		{Title: "Key", Width: 12},
 		{Title: "Summary", Width: 50},
 		{Title: "Status", Width: 15},
-		{Title: "Priority", Width: 10},
-		{Title: "Assignee", Width: 20},
+		{Title: "Priority", Width: 8},
+		{Title: "Assignee", Width: 18},
+		{Title: "Due Date", Width: 10},
+		{Title: "Last Comment", Width: 12},
+		{Title: "Labels", Width: 18},
 	}
 
 	t := table.New(
@@ -72,7 +76,10 @@ func (t *TicketsTable) SetIssues(issues []domain.Issue) {
 			truncate(issue.Summary, 48),
 			issue.Status,
 			issue.Priority,
-			truncate(assignee, 18),
+			truncate(assignee, 16),
+			formatDueDate(issue.DueDate),
+			formatRelativeTime(issue.LastCommentAt()),
+			formatLabels(issue.Labels, 16),
 		}
 	}
 
@@ -107,16 +114,17 @@ func (t *TicketsTable) SetSize(width, height int) {
 	t.height = height
 	t.table.SetHeight(height)
 
-	// Adjust summary column width based on available space
+	// Adjust summary column width based on available space.
+	// Fixed cols: ! + Key + Status + Priority + Assignee + DueDate + LastComment + Labels + padding
 	cols := t.table.Columns()
 	if len(cols) > 2 {
-		fixedWidth := 1 + 12 + 15 + 10 + 20 + 20 // indicator + key + status + priority + assignee + padding
+		fixedWidth := 1 + 12 + 15 + 8 + 18 + 10 + 12 + 18 + 20 // columns + padding
 		summaryWidth := width - fixedWidth
 		if summaryWidth < 20 {
 			summaryWidth = 20
 		}
-		if summaryWidth > 80 {
-			summaryWidth = 80
+		if summaryWidth > 60 {
+			summaryWidth = 60
 		}
 		cols[2].Width = summaryWidth
 		t.table.SetColumns(cols)
@@ -148,6 +156,39 @@ func (t *TicketsTable) Blur() {
 // Focused returns whether the table is focused.
 func (t *TicketsTable) Focused() bool {
 	return t.table.Focused()
+}
+
+// formatDueDate formats a due date as "YYYY-MM-DD" or "none" if nil.
+func formatDueDate(d *time.Time) string {
+	if d == nil {
+		return "none"
+	}
+	return d.Format("2006-01-02")
+}
+
+// formatRelativeTime formats a time as a human-readable relative string like "3d ago".
+// Returns "never" for nil, "today" for times within the past 24 hours.
+func formatRelativeTime(t *time.Time) string {
+	if t == nil {
+		return "never"
+	}
+	hours := int(time.Since(*t).Hours())
+	if hours < 24 {
+		return "today"
+	}
+	return fmt.Sprintf("%dd ago", hours/24)
+}
+
+// formatLabels formats a slice of labels as a truncated comma-separated string.
+func formatLabels(labels []string, maxLen int) string {
+	if len(labels) == 0 {
+		return "none"
+	}
+	joined := strings.Join(labels, ", ")
+	if len(joined) > maxLen {
+		return joined[:maxLen-3] + "..."
+	}
+	return joined
 }
 
 // truncate truncates a string to the given length.

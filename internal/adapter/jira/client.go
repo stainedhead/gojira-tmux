@@ -41,7 +41,7 @@ func (c *Client) SearchIssues(ctx context.Context, filter domain.IssueFilter) ([
 	params := url.Values{}
 	params.Set("jql", jql)
 	params.Set("maxResults", "100")
-	params.Set("fields", "key,summary,description,status,priority,assignee,reporter,duedate,created,updated,labels")
+	params.Set("fields", "key,summary,description,status,priority,assignee,reporter,duedate,created,updated,labels,comment")
 	// TODO: implement multi-page pagination using nextPageToken
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, searchURL+"?"+params.Encode(), nil)

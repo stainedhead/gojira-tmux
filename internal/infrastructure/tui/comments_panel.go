@@ -98,21 +98,25 @@ func (c *CommentsPanel) View() string {
 
 	if len(c.comments) == 0 {
 		b.WriteString(Styles.Muted.Render("No comments"))
-		return panelStyle.Width(c.width).Height(c.height).Render(b.String())
+		return panelStyle.Width(max(c.width, 0)).Height(max(c.height, 0)).Render(b.String())
 	}
 
 	// Render comments
 	for i, comment := range c.comments {
 		if i > 0 {
 			b.WriteString("\n")
-			b.WriteString(Styles.Muted.Render(strings.Repeat("─", c.width-4)))
+			sepWidth := c.width - 4
+			if sepWidth < 1 {
+				sepWidth = 1
+			}
+			b.WriteString(Styles.Muted.Render(strings.Repeat("─", sepWidth)))
 			b.WriteString("\n")
 		}
 
 		c.renderComment(&b, comment)
 	}
 
-	return panelStyle.Width(c.width).Height(c.height).Render(b.String())
+	return panelStyle.Width(max(c.width, 0)).Height(max(c.height, 0)).Render(b.String())
 }
 
 func (c *CommentsPanel) renderComment(b *strings.Builder, comment domain.Comment) {

@@ -63,10 +63,22 @@ func (i *Issue) Validate() error {
 	return nil
 }
 
+// doneStatuses are terminal statuses that indicate an issue is resolved.
+// Issues in these statuses do not need attention indicators.
+var doneStatuses = map[string]bool{
+	"Done":      true,
+	"Closed":    true,
+	"Resolved":  true,
+	"Cancelled": true,
+	"Won't Fix": true,
+	"Duplicate": true,
+}
+
 // NeedsAttention returns the attention indicator type for the issue.
 // Red dot (stale) takes precedence over yellow dot (no due date).
+// Issues in terminal/done statuses never need attention.
 func (i *Issue) NeedsAttention() AttentionType {
-	if i.Status != "Open" {
+	if doneStatuses[i.Status] {
 		return AttentionNone
 	}
 
@@ -83,19 +95,39 @@ func (i *Issue) NeedsAttention() AttentionType {
 	return AttentionNone
 }
 
-// IsStale returns true if the issue has an assignee who hasn't commented in 14+ days.
+// IsStale returns true if the issue has an assignee who hasn't engaged in 14+ days.
+// When comments are loaded, the assignee's last comment date is used.
+// When no assignee comment is found, Updated timestamp is used as a proxy
+// (falling back to Created if Updated is not set).
 func (i *Issue) IsStale() bool {
 	if i.Assignee == nil {
 		return false
 	}
 
 	lastAssigneeComment := i.LastAssigneeComment()
-	if lastAssigneeComment == nil {
-		// No assignee comment ever - check if issue is older than 14 days
-		return time.Since(i.Created) > 14*24*time.Hour
+	if lastAssigneeComment != nil {
+		return time.Since(lastAssigneeComment.Created) > 14*24*time.Hour
 	}
 
-	return time.Since(lastAssigneeComment.Created) > 14*24*time.Hour
+	// No assignee comment found — use Updated as proxy for recent activity.
+	lastActivity := i.Updated
+	if lastActivity.IsZero() {
+		lastActivity = i.Created
+	}
+	return time.Since(lastActivity) > 14*24*time.Hour
+}
+
+// LastCommentAt returns the creation time of the most recent comment,
+// or nil if there are no comments.
+func (i *Issue) LastCommentAt() *time.Time {
+	if len(i.Comments) == 0 {
+		return nil
+	}
+	t := i.Comments[len(i.Comments)-1].Created
+	if t.IsZero() {
+		return nil
+	}
+	return &t
 }
 
 // LastAssigneeComment returns the most recent comment by the assignee.

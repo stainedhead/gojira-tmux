@@ -88,7 +88,7 @@ func (p *PropertiesPanel) View() string {
 
 	if p.issue == nil {
 		b.WriteString(Styles.Muted.Render("Select an issue to view details"))
-		return panelStyle.Width(p.width).Height(p.height).Render(b.String())
+		return panelStyle.Width(max(p.width, 0)).Height(max(p.height, 0)).Render(b.String())
 	}
 
 	// Build properties list
@@ -133,7 +133,7 @@ func (p *PropertiesPanel) View() string {
 		b.WriteString(Styles.Muted.Render(desc))
 	}
 
-	return panelStyle.Width(p.width).Height(p.height).Render(b.String())
+	return panelStyle.Width(max(p.width, 0)).Height(max(p.height, 0)).Render(b.String())
 }
 
 func (p *PropertiesPanel) getReporter() string {
