@@ -21,6 +21,9 @@ const (
 	FilterFocusStatus
 )
 
+// maxDropdownVisible is the maximum number of items shown at once in an open dropdown.
+const maxDropdownVisible = 8
+
 // FilterBar is a component for filtering issues.
 type FilterBar struct {
 	focus   FilterFocus
@@ -38,8 +41,24 @@ type FilterBar struct {
 	statusIdx  int
 
 	// Dropdown overlay state
-	dropdownOpen   bool
-	dropdownCursor int
+	dropdownOpen         bool
+	dropdownCursor       int
+	dropdownScrollOffset int
+}
+
+// ExtraHeight returns the number of extra lines the open dropdown adds to the
+// rendered output.  Returns 0 when the dropdown is closed.
+func (f *FilterBar) ExtraHeight() int {
+	if !f.dropdownOpen {
+		return 0
+	}
+	opts := f.getCurrentOptions()
+	visible := len(opts)
+	if visible > maxDropdownVisible {
+		visible = maxDropdownVisible
+	}
+	// title line + border-top + items + border-bottom
+	return 1 + 1 + visible + 1
 }
 
 // defaultFallbackStatuses are used when no statuses are provided or fetched.
@@ -197,8 +216,10 @@ func (f *FilterBar) updateDropdown(msg tea.KeyMsg) (*FilterBar, tea.Cmd) {
 	switch msg.String() {
 	case "up", "k":
 		f.dropdownCursor = (f.dropdownCursor + len(opts) - 1) % len(opts)
+		f.clampDropdownScroll()
 	case "down", "j":
 		f.dropdownCursor = (f.dropdownCursor + 1) % len(opts)
+		f.clampDropdownScroll()
 	case "enter", " ":
 		f.setCurrentIndex(f.dropdownCursor)
 		f.dropdownOpen = false
@@ -207,6 +228,17 @@ func (f *FilterBar) updateDropdown(msg tea.KeyMsg) (*FilterBar, tea.Cmd) {
 		f.dropdownOpen = false
 	}
 	return f, nil
+}
+
+// clampDropdownScroll adjusts dropdownScrollOffset so dropdownCursor is
+// always within the visible window.
+func (f *FilterBar) clampDropdownScroll() {
+	if f.dropdownCursor < f.dropdownScrollOffset {
+		f.dropdownScrollOffset = f.dropdownCursor
+	}
+	if f.dropdownCursor >= f.dropdownScrollOffset+maxDropdownVisible {
+		f.dropdownScrollOffset = f.dropdownCursor - maxDropdownVisible + 1
+	}
 }
 
 // updateNormal handles keys when no dropdown is open.
@@ -224,6 +256,8 @@ func (f *FilterBar) updateNormal(msg tea.KeyMsg) (*FilterBar, tea.Cmd) {
 		return f, f.emitFilterChanged()
 	case "enter", " ":
 		f.dropdownCursor = f.getCurrentIndex()
+		f.dropdownScrollOffset = 0
+		f.clampDropdownScroll()
 		f.dropdownOpen = true
 	}
 	return f, nil
@@ -378,6 +412,7 @@ func (f *FilterBar) View() string {
 }
 
 // renderDropdownOverlay renders the open dropdown as a bordered list below the filter bar.
+// At most maxDropdownVisible items are shown; the window scrolls to keep the cursor visible.
 func (f *FilterBar) renderDropdownOverlay() string {
 	opts := f.getCurrentOptions()
 	label := f.getCurrentLabel()
@@ -389,13 +424,29 @@ func (f *FilterBar) renderDropdownOverlay() string {
 	normalStyle := lipgloss.NewStyle().
 		Foreground(Colors.Foreground)
 
-	rows := make([]string, len(opts))
-	for i, opt := range opts {
-		if i == f.dropdownCursor {
+	// Determine the visible slice
+	end := f.dropdownScrollOffset + maxDropdownVisible
+	if end > len(opts) {
+		end = len(opts)
+	}
+	visibleOpts := opts[f.dropdownScrollOffset:end]
+
+	rows := make([]string, len(visibleOpts))
+	for i, opt := range visibleOpts {
+		globalIdx := f.dropdownScrollOffset + i
+		if globalIdx == f.dropdownCursor {
 			rows[i] = highlightStyle.Render("▶ " + opt)
 		} else {
 			rows[i] = normalStyle.Render("  " + opt)
 		}
+	}
+
+	// Scroll indicators
+	if f.dropdownScrollOffset > 0 {
+		rows = append([]string{Styles.Muted.Render("  ↑ more")}, rows...)
+	}
+	if end < len(opts) {
+		rows = append(rows, Styles.Muted.Render("  ↓ more"))
 	}
 
 	content := strings.Join(rows, "\n")

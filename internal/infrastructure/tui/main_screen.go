@@ -325,8 +325,27 @@ func (s *MainScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch s.focus {
 	case MainFocusFilter:
 		s.filterBar, cmd = s.filterBar.Update(msg)
+		// Recalculate sizes whenever the dropdown opens/closes to keep total
+		// rendered height within the terminal bounds.
+		s.updateComponentSizes()
 	case MainFocusTable:
+		// Issue 1: live detail panel update — capture cursor before routing.
+		var prevKey string
+		if s.showDetails {
+			if prev := s.table.SelectedIssue(); prev != nil {
+				prevKey = prev.Key
+			}
+		}
 		s.table, cmd = s.table.Update(msg)
+		// If the cursor moved while details are open, update the panels.
+		if s.showDetails {
+			if curr := s.table.SelectedIssue(); curr != nil && curr.Key != prevKey {
+				s.selectedIssue = curr
+				s.propertiesPanel.SetIssue(curr)
+				s.commentsPanel.SetComments(curr.Comments)
+				cmd = tea.Batch(cmd, s.loadIssueDetails(curr.Key))
+			}
+		}
 	case MainFocusProperties:
 		s.propertiesPanel, cmd = s.propertiesPanel.Update(msg)
 	case MainFocusComments:
@@ -340,13 +359,25 @@ func (s *MainScreen) updateComponentSizes() {
 	contentWidth := max(s.width-4, 0)
 	s.filterBar.SetWidth(contentWidth)
 
-	if s.showDetails {
-		// Side-by-side layout: table on left (~60%), detail panels stacked on right (~40%)
-		// Overhead: app padding(2) + title+blank(2) + filterbar+blank(2) + count+blank(2) + footer(2) = 10
-		contentHeight := max(s.height-10, 8)
+	// Reserve vertical space for any open dropdown overlay.
+	filterExtra := s.filterBar.ExtraHeight()
 
-		tableWidth := max(contentWidth*60/100, 40)
-		detailWidth := max(contentWidth-tableWidth, 20)
+	if s.showDetails {
+		// Side-by-side layout: table on left (~60%), detail panels stacked on right (~40%).
+		// Overhead: app padding(2) + title+blank(2) + filterbar+blank(2) + count+blank(2) + footer(2) = 10
+		contentHeight := max(s.height-10-filterExtra, 8)
+
+		// Compute column widths so tableWidth + detailWidth == contentWidth always.
+		// On narrow screens the table shrinks rather than the panels going off-screen.
+		const minDetailWidth = 20
+		tableWidth := contentWidth * 60 / 100
+		if tableWidth > contentWidth-minDetailWidth {
+			tableWidth = contentWidth - minDetailWidth
+		}
+		if tableWidth < 10 {
+			tableWidth = 10
+		}
+		detailWidth := contentWidth - tableWidth
 
 		// Properties gets 70%, comments gets 30% — properties has more fields to display
 		propHeight := max(contentHeight*7/10, 5)
@@ -357,7 +388,7 @@ func (s *MainScreen) updateComponentSizes() {
 		s.commentsPanel.SetSize(detailWidth, commentHeight)
 	} else {
 		// Full-width table
-		s.table.SetSize(contentWidth, max(s.height-10, 5))
+		s.table.SetSize(contentWidth, max(s.height-10-filterExtra, 5))
 	}
 }
 
