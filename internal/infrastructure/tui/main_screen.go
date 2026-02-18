@@ -303,21 +303,22 @@ func (s *MainScreen) updateComponentSizes() {
 	s.filterBar.SetWidth(contentWidth)
 
 	if s.showDetails {
-		// Stacked layout: table on top (~40%), details panel below (~60%)
-		contentHeight := max(s.height-12, 4)
-		tableHeight := max(contentHeight*40/100, 3)
-		detailHeight := max(contentHeight-tableHeight-1, 2)
+		// Side-by-side layout: table on left (~60%), detail panels stacked on right (~40%)
+		contentHeight := max(s.height-12, 8)
 
-		// Properties panel gets 40% width, comments gets the rest
-		propWidth := max(contentWidth*40/100, 20)
-		commentWidth := max(contentWidth-propWidth, 20)
+		tableWidth := max(contentWidth*60/100, 40)
+		detailWidth := max(contentWidth-tableWidth, 20)
 
-		s.table.SetSize(contentWidth, tableHeight)
-		s.propertiesPanel.SetSize(propWidth, detailHeight)
-		s.commentsPanel.SetSize(commentWidth, detailHeight)
+		// Properties gets top half, comments gets bottom half
+		propHeight := max(contentHeight/2, 4)
+		commentHeight := max(contentHeight-propHeight, 4)
+
+		s.table.SetSize(tableWidth, max(contentHeight, 5))
+		s.propertiesPanel.SetSize(detailWidth, propHeight)
+		s.commentsPanel.SetSize(detailWidth, commentHeight)
 	} else {
 		// Full-width table
-		s.table.SetSize(contentWidth, max(s.height-12, 1))
+		s.table.SetSize(contentWidth, max(s.height-12, 5))
 	}
 }
 
@@ -475,16 +476,18 @@ func (s *MainScreen) renderSplitView(b *strings.Builder) {
 	b.WriteString(count)
 	b.WriteString("\n\n")
 
-	// Table on top (full width)
-	b.WriteString(s.table.View())
-	b.WriteString("\n")
-
-	// Properties and comments side by side below the table
-	detailsView := lipgloss.JoinHorizontal(lipgloss.Top,
+	// Right side: properties panel above comments panel
+	rightPanels := lipgloss.JoinVertical(lipgloss.Left,
 		s.propertiesPanel.View(),
 		s.commentsPanel.View(),
 	)
-	b.WriteString(detailsView)
+
+	// Table on left, detail panels stacked on right
+	splitView := lipgloss.JoinHorizontal(lipgloss.Top,
+		s.table.View(),
+		rightPanels,
+	)
+	b.WriteString(splitView)
 	b.WriteString("\n")
 }
 

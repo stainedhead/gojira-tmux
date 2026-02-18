@@ -25,7 +25,7 @@ type TicketsTable struct {
 // NewTicketsTable creates a new tickets table.
 func NewTicketsTable() *TicketsTable {
 	columns := []table.Column{
-		{Title: "     ", Width: 5},
+		{Title: "        ", Width: 8},
 		{Title: "Key", Width: 15},
 		{Title: "Summary", Width: 50},
 		{Title: "Status", Width: 15},
@@ -124,7 +124,7 @@ func (t *TicketsTable) SetSize(width, height int) {
 	// Fixed cols: indicators + Key + Status + Priority + Assignee + DueDate + LastComment + Labels + padding
 	cols := t.table.Columns()
 	if len(cols) > 2 {
-		fixedWidth := 5 + 15 + 15 + 8 + 18 + 10 + 12 + 18 + 20 // columns + padding
+		fixedWidth := 8 + 15 + 15 + 8 + 18 + 10 + 12 + 18 + 20 // columns + padding
 		summaryWidth := width - fixedWidth
 		if summaryWidth < 20 {
 			summaryWidth = 20
