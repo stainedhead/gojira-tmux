@@ -354,6 +354,11 @@ func (s *MainScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return s, cmd
 }
 
+// maxTableRows is the maximum number of data rows shown in the tickets table
+// when the detail panels are visible. Capping the table height guarantees
+// predictable vertical space for the panels below.
+const maxTableRows = 12
+
 // updateComponentSizes updates sizes of all components based on current layout.
 func (s *MainScreen) updateComponentSizes() {
 	contentWidth := max(s.width-4, 0)
@@ -363,31 +368,31 @@ func (s *MainScreen) updateComponentSizes() {
 	filterExtra := s.filterBar.ExtraHeight()
 
 	if s.showDetails {
-		// Side-by-side layout: table on left (~60%), detail panels stacked on right (~40%).
-		// Overhead: app padding(2) + title+blank(2) + filterbar+blank(2) + count+blank(2) + footer(2) = 10
-		contentHeight := max(s.height-10-filterExtra, 8)
+		// Stacked layout: table fills full width at top (capped to maxTableRows),
+		// detail panels side-by-side below the table.
+		//
+		// Vertical accounting (App padding 1top+1bot = 2, captured in s.height):
+		//   title+blank(2) + filterbar+blank(2+filterExtra) + count+blank(2)
+		//   + table(maxTableRows+2) + gap(1) + panels(detailHeight)
+		//   + newline-after-panels(1) + footer-blank+help(2)
+		// Total = 12 + filterExtra + maxTableRows + detailHeight  → solve for detailHeight
+		detailHeight := max(s.height-12-filterExtra-maxTableRows, 4)
 
-		// Compute column widths so tableWidth + detailWidth == contentWidth always.
-		// On narrow screens the table shrinks rather than the panels going off-screen.
-		const minDetailWidth = 20
-		tableWidth := contentWidth * 60 / 100
-		if tableWidth > contentWidth-minDetailWidth {
-			tableWidth = contentWidth - minDetailWidth
+		s.table.SetSize(contentWidth, maxTableRows)
+
+		// Split panels 50/50 horizontally with a 1-char gap between them.
+		leftWidth := (contentWidth - 1) / 2
+		rightWidth := contentWidth - leftWidth - 1
+		if leftWidth < 10 {
+			leftWidth = 10
 		}
-		if tableWidth < 10 {
-			tableWidth = 10
+		if rightWidth < 10 {
+			rightWidth = 10
 		}
-		detailWidth := contentWidth - tableWidth
-
-		// Properties gets 70%, comments gets 30% — properties has more fields to display
-		propHeight := max(contentHeight*7/10, 5)
-		commentHeight := max(contentHeight-propHeight, 4)
-
-		s.table.SetSize(tableWidth, max(contentHeight, 5))
-		s.propertiesPanel.SetSize(detailWidth, propHeight)
-		s.commentsPanel.SetSize(detailWidth, commentHeight)
+		s.propertiesPanel.SetSize(leftWidth, detailHeight)
+		s.commentsPanel.SetSize(rightWidth, detailHeight)
 	} else {
-		// Full-width table
+		// Full-width table fills all available vertical space.
 		s.table.SetSize(contentWidth, max(s.height-10-filterExtra, 5))
 	}
 }
@@ -546,18 +551,18 @@ func (s *MainScreen) renderSplitView(b *strings.Builder) {
 	b.WriteString(count)
 	b.WriteString("\n\n")
 
-	// Right side: properties panel above comments panel
-	rightPanels := lipgloss.JoinVertical(lipgloss.Left,
+	// Full-width table at top
+	b.WriteString(s.table.View())
+	b.WriteString("\n")
+
+	// Detail panels side-by-side below the table.
+	// Properties (field details) on the left, Comments on the right.
+	detailRow := lipgloss.JoinHorizontal(lipgloss.Top,
 		s.propertiesPanel.View(),
+		" ",
 		s.commentsPanel.View(),
 	)
-
-	// Table on left, detail panels stacked on right
-	splitView := lipgloss.JoinHorizontal(lipgloss.Top,
-		s.table.View(),
-		rightPanels,
-	)
-	b.WriteString(splitView)
+	b.WriteString(detailRow)
 	b.WriteString("\n")
 }
 
