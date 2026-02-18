@@ -222,7 +222,7 @@ func TestJQLBuilder_OpenSentinel(t *testing.T) {
 	builder := jira.NewJQLBuilder(projects, nil)
 
 	got := builder.Build(domain.IssueFilter{Status: "-Open-"})
-	want := `project IN ("PROJ") AND status in ("Ready for work", "In Progress", "Ready for review") ORDER BY updated DESC`
+	want := `project IN ("PROJ") AND status in ("Ready for Work", "In Progress", "On Hold", "Escalated") ORDER BY updated DESC`
 	if got != want {
 		t.Errorf("Build(Status=-Open-)\ngot  %q\nwant %q", got, want)
 	}
