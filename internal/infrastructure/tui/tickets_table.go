@@ -13,14 +13,14 @@ import (
 
 // Fixed column content widths (excluding padding).
 const (
-	colWidthIndicator   = 10
+	colWidthIndicator   = 6
 	colWidthKey         = 11
 	colWidthStatus      = 17
 	colWidthPriority    = 8
 	colWidthAssignee    = 18
 	colWidthDueDate     = 10
 	colWidthLastComment = 12
-	colWidthLabels      = 18
+	colWidthLabels      = 22
 	colMinSummary       = 20
 	colMaxSummary       = 60
 )
@@ -32,7 +32,7 @@ const colPad = 1
 const tableNumCols = 9
 
 // fixedColsWidth is the total content width of all non-summary columns.
-// = 10+11+17+8+18+10+12+18 = 104
+// = 6+11+17+8+18+10+12+22 = 104
 const fixedColsWidth = colWidthIndicator + colWidthKey + colWidthStatus + colWidthPriority +
 	colWidthAssignee + colWidthDueDate + colWidthLastComment + colWidthLabels
 
