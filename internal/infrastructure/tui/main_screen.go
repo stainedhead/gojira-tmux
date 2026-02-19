@@ -66,7 +66,11 @@ func NewMainScreenModel(jiraPort domain.JiraPort, configPort domain.ConfigPort, 
 		projects = configPort.GetProjects()
 	}
 
-	filterBar := NewFilterBar(team, projects, statuses)
+	var statusFilters []domain.StatusFilter
+	if cfg != nil {
+		statusFilters = cfg.StatusFilters
+	}
+	filterBar := NewFilterBar(team, projects, statuses, statusFilters)
 	table := NewTicketsTable()
 	propertiesPanel := NewPropertiesPanel()
 	commentsPanel := NewCommentsPanel()

@@ -18,7 +18,7 @@ func TestClient_SearchIssues_V3Endpoint(t *testing.T) {
 	srv := testutil.NewMockServer(t)
 	defer srv.Close()
 
-	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil)
+	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil, nil)
 	_, err := client.SearchIssues(context.Background(), domain.IssueFilter{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -37,7 +37,7 @@ func TestClient_SearchIssues_SendsFieldsParam(t *testing.T) {
 	srv := testutil.NewMockServer(t)
 	defer srv.Close()
 
-	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil)
+	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil, nil)
 	_, _ = client.SearchIssues(context.Background(), domain.IssueFilter{})
 
 	last := srv.LastSearchRequest()
@@ -53,7 +53,7 @@ func TestClient_SearchIssues_SendsMaxResults(t *testing.T) {
 	srv := testutil.NewMockServer(t)
 	defer srv.Close()
 
-	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil)
+	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil, nil)
 	_, _ = client.SearchIssues(context.Background(), domain.IssueFilter{})
 
 	last := srv.LastSearchRequest()
@@ -69,7 +69,7 @@ func TestClient_SearchIssues_ParsesV3Response(t *testing.T) {
 	srv := testutil.NewMockServer(t)
 	defer srv.Close()
 
-	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil)
+	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil, nil)
 	issues, err := client.SearchIssues(context.Background(), domain.IssueFilter{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -98,7 +98,7 @@ func TestClient_SearchIssues_EmptyResults(t *testing.T) {
 
 	srv.SetSearchResponse(testutil.EmptySearchResponse())
 
-	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil)
+	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil, nil)
 	issues, err := client.SearchIssues(context.Background(), domain.IssueFilter{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -116,7 +116,7 @@ func TestClient_SearchIssues_IgnoresNextPageToken(t *testing.T) {
 	page1, _ := testutil.PaginatedSearchResponse()
 	srv.SetSearchResponse(page1)
 
-	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil)
+	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil, nil)
 	issues, err := client.SearchIssues(context.Background(), domain.IssueFilter{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -143,7 +143,7 @@ func TestClient_SearchIssues_WithADFDescription(t *testing.T) {
 	}
 	srv.SetSearchResponse(testutil.SearchResponse(1, issues, ""))
 
-	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil)
+	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil, nil)
 	result, err := client.SearchIssues(context.Background(), domain.IssueFilter{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -168,7 +168,7 @@ func TestClient_SearchIssues_WithStringDescription(t *testing.T) {
 	}
 	srv.SetSearchResponse(testutil.SearchResponse(1, issues, ""))
 
-	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil)
+	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil, nil)
 	result, err := client.SearchIssues(context.Background(), domain.IssueFilter{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -182,7 +182,7 @@ func TestClient_SearchIssues_Unauthorized(t *testing.T) {
 	srv := testutil.NewMockServer(t)
 	defer srv.Close()
 
-	client := jira.NewClient(srv.BaseURL(), "wrong@example.com", "wrong-token", nil, nil)
+	client := jira.NewClient(srv.BaseURL(), "wrong@example.com", "wrong-token", nil, nil, nil)
 	_, err := client.SearchIssues(context.Background(), domain.IssueFilter{})
 	if err == nil {
 		t.Fatal("expected error for unauthorized request")
@@ -198,7 +198,7 @@ func TestClient_SearchIssues_BadRequest(t *testing.T) {
 
 	srv.SetSearchError(http.StatusBadRequest, testutil.ErrorResponse("Invalid JQL"))
 
-	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil)
+	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil, nil)
 	_, err := client.SearchIssues(context.Background(), domain.IssueFilter{})
 	if err == nil {
 		t.Fatal("expected error for bad request")
@@ -214,7 +214,7 @@ func TestClient_SearchIssues_ServerError(t *testing.T) {
 
 	srv.SetSearchError(http.StatusInternalServerError, testutil.ErrorResponse("Internal error"))
 
-	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil)
+	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil, nil)
 	_, err := client.SearchIssues(context.Background(), domain.IssueFilter{})
 	if err == nil {
 		t.Fatal("expected error for server error")
@@ -232,7 +232,7 @@ func TestClient_GetIssue_V3Endpoint(t *testing.T) {
 
 	srv.SetIssueResponse("PROJ-1", testutil.IssueWithCommentsResponse())
 
-	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil)
+	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil, nil)
 	_, err := client.GetIssue(context.Background(), "PROJ-1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -253,7 +253,7 @@ func TestClient_GetIssue_ExpandsRenderedFieldsAndComments(t *testing.T) {
 
 	srv.SetIssueResponse("PROJ-1", testutil.IssueWithCommentsResponse())
 
-	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil)
+	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil, nil)
 	_, _ = client.GetIssue(context.Background(), "PROJ-1")
 
 	last := srv.LastIssueRequest()
@@ -274,7 +274,7 @@ func TestClient_GetIssue_ParsesAllFields(t *testing.T) {
 
 	srv.SetIssueResponse("PROJ-1", testutil.IssueWithCommentsResponse())
 
-	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil)
+	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil, nil)
 	issue, err := client.GetIssue(context.Background(), "PROJ-1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -315,7 +315,7 @@ func TestClient_GetIssue_WithADFDescription(t *testing.T) {
 
 	srv.SetIssueResponse("PROJ-1", testutil.IssueWithADFResponse())
 
-	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil)
+	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil, nil)
 	issue, err := client.GetIssue(context.Background(), "PROJ-1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -335,7 +335,7 @@ func TestClient_GetIssue_WithADFComments(t *testing.T) {
 
 	srv.SetIssueResponse("PROJ-1", testutil.IssueWithADFResponse())
 
-	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil)
+	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil, nil)
 	issue, err := client.GetIssue(context.Background(), "PROJ-1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -365,7 +365,7 @@ func TestClient_GetIssue_WithStringComments(t *testing.T) {
 	// v2 compat: comments with plain string body
 	srv.SetIssueResponse("PROJ-1", testutil.IssueWithCommentsResponse())
 
-	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil)
+	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil, nil)
 	issue, err := client.GetIssue(context.Background(), "PROJ-1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -386,7 +386,7 @@ func TestClient_GetIssue_NullDescription(t *testing.T) {
 	// Issue with no description set (will be null/absent in JSON)
 	srv.SetIssueResponse("PROJ-1", testutil.IssueJSON("PROJ-1", "No description", "Open"))
 
-	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil)
+	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil, nil)
 	issue, err := client.GetIssue(context.Background(), "PROJ-1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -401,7 +401,7 @@ func TestClient_GetIssue_NotFound(t *testing.T) {
 	defer srv.Close()
 
 	// Don't set any issue response — unknown key returns 404
-	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil)
+	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil, nil)
 	_, err := client.GetIssue(context.Background(), "UNKNOWN-99")
 	if err == nil {
 		t.Fatal("expected error for nonexistent issue")
@@ -417,7 +417,7 @@ func TestClient_GetIssue_ServerError(t *testing.T) {
 
 	srv.SetIssueError(http.StatusInternalServerError)
 
-	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil)
+	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil, nil)
 	_, err := client.GetIssue(context.Background(), "PROJ-1")
 	if err == nil {
 		t.Fatal("expected error for server error")
@@ -433,7 +433,7 @@ func TestClient_GetIssue_Unauthorized(t *testing.T) {
 
 	srv.SetIssueResponse("PROJ-1", testutil.IssueJSON("PROJ-1", "Test", "Open"))
 
-	client := jira.NewClient(srv.BaseURL(), "wrong@example.com", "wrong-token", nil, nil)
+	client := jira.NewClient(srv.BaseURL(), "wrong@example.com", "wrong-token", nil, nil, nil)
 	_, err := client.GetIssue(context.Background(), "PROJ-1")
 	if err == nil {
 		t.Fatal("expected error for unauthorized request")
@@ -451,7 +451,7 @@ func TestClient_GetIssueComments(t *testing.T) {
 
 	srv.SetIssueResponse("PROJ-1", testutil.IssueWithADFResponse())
 
-	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil)
+	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil, nil)
 	comments, err := client.GetIssueComments(context.Background(), "PROJ-1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -473,7 +473,7 @@ func TestClient_GetIssueComments_NoComments(t *testing.T) {
 
 	srv.SetIssueResponse("PROJ-1", testutil.IssueJSON("PROJ-1", "No comments", "Open"))
 
-	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil)
+	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil, nil)
 	comments, err := client.GetIssueComments(context.Background(), "PROJ-1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -488,7 +488,7 @@ func TestClient_GetIssueComments_Error(t *testing.T) {
 	defer srv.Close()
 
 	// Don't set any issue response — will return 404
-	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil)
+	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil, nil)
 	_, err := client.GetIssueComments(context.Background(), "UNKNOWN-1")
 	if err == nil {
 		t.Fatal("expected error")
@@ -503,7 +503,7 @@ func TestClient_ListStatuses_ReturnsNames(t *testing.T) {
 
 	srv.SetStatusResponse(testutil.StatusListResponse("To Do", "In Progress", "In Review", "Done"))
 
-	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil)
+	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil, nil)
 	statuses, err := client.ListStatuses(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -524,7 +524,7 @@ func TestClient_ListStatuses_Unauthorized(t *testing.T) {
 	srv := testutil.NewMockServer(t)
 	defer srv.Close()
 
-	client := jira.NewClient(srv.BaseURL(), "wrong@example.com", "wrong-token", nil, nil)
+	client := jira.NewClient(srv.BaseURL(), "wrong@example.com", "wrong-token", nil, nil, nil)
 	_, err := client.ListStatuses(context.Background())
 	if err == nil {
 		t.Fatal("expected error for unauthorized request")
@@ -537,7 +537,7 @@ func TestClient_ListStatuses_ServerError(t *testing.T) {
 
 	srv.SetStatusError(http.StatusInternalServerError)
 
-	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil)
+	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil, nil)
 	_, err := client.ListStatuses(context.Background())
 	if err == nil {
 		t.Fatal("expected error for server error")
@@ -555,7 +555,7 @@ func TestClient_ListProjectStatuses_ReturnsNames(t *testing.T) {
 
 	srv.SetProjectStatusesResponse("MYPROJ", testutil.ProjectStatusesResponse("To Do", "In Progress", "Done"))
 
-	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil)
+	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil, nil)
 	statuses, err := client.ListProjectStatuses(context.Background(), "MYPROJ")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -576,7 +576,7 @@ func TestClient_ListProjectStatuses_DeduplicatesAcrossIssueTypes(t *testing.T) {
 
 	srv.SetProjectStatusesResponse("MYPROJ", testutil.ProjectStatusesMultiTypeResponse())
 
-	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil)
+	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil, nil)
 	statuses, err := client.ListProjectStatuses(context.Background(), "MYPROJ")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -593,7 +593,7 @@ func TestClient_ListProjectStatuses_EmptyProject(t *testing.T) {
 	defer srv.Close()
 
 	// No response configured → mock returns empty array
-	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil)
+	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil, nil)
 	statuses, err := client.ListProjectStatuses(context.Background(), "EMPTY")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -609,7 +609,7 @@ func TestClient_ListProjectStatuses_Unauthorized(t *testing.T) {
 
 	srv.SetProjectStatusesResponse("MYPROJ", testutil.ProjectStatusesResponse("To Do"))
 
-	client := jira.NewClient(srv.BaseURL(), "wrong@example.com", "wrong-token", nil, nil)
+	client := jira.NewClient(srv.BaseURL(), "wrong@example.com", "wrong-token", nil, nil, nil)
 	_, err := client.ListProjectStatuses(context.Background(), "MYPROJ")
 	if err == nil {
 		t.Fatal("expected error for unauthorized request")
@@ -625,7 +625,7 @@ func TestClient_ListProjectStatuses_ServerError(t *testing.T) {
 
 	srv.SetProjectStatusesError(http.StatusInternalServerError)
 
-	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil)
+	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil, nil)
 	_, err := client.ListProjectStatuses(context.Background(), "MYPROJ")
 	if err == nil {
 		t.Fatal("expected error for server error")
@@ -641,7 +641,7 @@ func TestClient_SearchIssues_SendsBasicAuth(t *testing.T) {
 	srv := testutil.NewMockServer(t)
 	defer srv.Close()
 
-	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil)
+	client := jira.NewClient(srv.BaseURL(), "test@example.com", "test-token", nil, nil, nil)
 	_, err := client.SearchIssues(context.Background(), domain.IssueFilter{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

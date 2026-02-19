@@ -9,15 +9,23 @@ import (
 
 // JQLBuilder builds JQL queries from filter criteria.
 type JQLBuilder struct {
-	projects []domain.Project
-	team     []domain.TeamMember
+	projects      []domain.Project
+	team          []domain.TeamMember
+	statusFilters []domain.StatusFilter
 }
 
 // NewJQLBuilder creates a new JQL builder.
-func NewJQLBuilder(projects []domain.Project, team []domain.TeamMember) *JQLBuilder {
+// statusFilters defines the named filter groups shown in the status dropdown.
+// If nil or empty, domain.DefaultStatusFilters() is used.
+func NewJQLBuilder(projects []domain.Project, team []domain.TeamMember, statusFilters []domain.StatusFilter) *JQLBuilder {
+	sf := statusFilters
+	if len(sf) == 0 {
+		sf = domain.DefaultStatusFilters()
+	}
 	return &JQLBuilder{
-		projects: projects,
-		team:     team,
+		projects:      projects,
+		team:          team,
+		statusFilters: sf,
 	}
 }
 
@@ -103,17 +111,23 @@ func (b *JQLBuilder) buildAssigneeCondition(identifier string) string {
 }
 
 // buildStatusCondition builds the status filter condition.
-// The status value is the exact Jira status name (fetched from the API).
-// The special sentinel "-Open-" maps to a multi-status "open work" condition.
+// If the status matches a named filter group, it expands to a multi-status clause.
+// Otherwise the value is treated as a single Jira status name.
 func (b *JQLBuilder) buildStatusCondition(status string) string {
 	if status == "" || status == "All" {
 		return ""
 	}
-	if status == "-Open-" {
-		return `status in ("Ready for Work", "In Progress", "On Hold", "Escalated")`
-	}
-	if status == "-Active-" {
-		return `status in ("In Progress", "Escalated", "Testing in Progress")`
+	for _, sf := range b.statusFilters {
+		if sf.Name == status {
+			if len(sf.Statuses) == 0 {
+				return ""
+			}
+			escaped := make([]string, len(sf.Statuses))
+			for i, s := range sf.Statuses {
+				escaped[i] = escapeJQL(s)
+			}
+			return fmt.Sprintf(`status in (%s)`, strings.Join(escaped, ", "))
+		}
 	}
 	return fmt.Sprintf(`status in (%s)`, escapeJQL(status))
 }

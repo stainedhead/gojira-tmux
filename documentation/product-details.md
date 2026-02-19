@@ -86,9 +86,20 @@ Users without a stored Jira API token see the setup screen:
 |-----------|---------|----------|
 | Project | `-All-` + configured projects | Filters tickets by project key |
 | Member | `-All-` + configured team members | Filters by assignee email |
-| Status | `All`, `-Active-` + live Jira status names fetched from API | Filters by ticket status |
+| Status | `All` + named filter groups + live Jira status names | Filters by ticket status |
 
 Filter selections are persisted to `config.yaml` and restored on next launch.
+
+#### Status Filter Groups
+
+Named filter groups appear at the top of the Status dropdown (after `All`) and each expand to a multi-status JQL condition. Groups are defined in `config.yaml` under `status_filters`. If the section is omitted, the following built-in defaults are used:
+
+| Group | Statuses |
+|-------|---------|
+| `-Open-` | Ready for Work, In Progress, On Hold, Escalated |
+| `-Active-` | In Progress, Escalated, Testing in Progress |
+
+Custom groups can be added, renamed, or removed to match your team's Jira workflow. Defining `status_filters:` in the config replaces the defaults entirely.
 
 ### Tickets Table
 
@@ -193,6 +204,26 @@ team:
     alias: "JohnD"  # optional
   - name: "Jane Smith"
     email: "jane.smith@company.com"
+
+# Optional: define named status filter groups for the Status dropdown.
+# If omitted, built-in defaults (-Open- and -Active-) are used.
+status_filters:
+  - name: "-Open-"
+    statuses:
+      - "Ready for Work"
+      - "In Progress"
+      - "On Hold"
+      - "Escalated"
+  - name: "-Active-"
+    statuses:
+      - "In Progress"
+      - "Escalated"
+      - "Testing in Progress"
+  # Add custom groups as needed:
+  # - name: "-My Work-"
+  #   statuses:
+  #     - "In Progress"
+  #     - "In Review"
 ```
 
 ## Related Documentation

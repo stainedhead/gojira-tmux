@@ -155,9 +155,18 @@ status in ("{status}") ORDER BY updated DESC
 assignee = "{email}" AND project = "{key}" AND status in ("{status}") ORDER BY updated DESC
 ```
 
-### Status Filter
+### Status Filter Groups
 
-Status options are fetched dynamically from `/rest/api/3/status` scoped to the configured projects. The status string from the API is used directly in the JQL `status in ("X")` clause — no translation layer. A special `-Active-` sentinel is available that expands to all non-Done statuses.
+Named filter groups are defined in `config.yaml` under `status_filters`. Each group name appears in the Status dropdown and expands to a multi-status JQL clause at query time. If no `status_filters` section is present, the following built-in defaults are used:
+
+| Group | JQL expansion |
+|-------|--------------|
+| `-Open-` | `status in ("Ready for Work", "In Progress", "On Hold", "Escalated")` |
+| `-Active-` | `status in ("In Progress", "Escalated", "Testing in Progress")` |
+
+Individual Jira status names (fetched from `/rest/api/3/status` scoped to configured projects) appear below the groups and are passed directly to JQL as `status in ("X")`.
+
+Defining `status_filters:` in the config replaces the built-in defaults entirely, giving teams full control over which groups are available.
 
 ## BubbleTea Component Architecture
 

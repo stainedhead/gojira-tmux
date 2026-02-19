@@ -18,6 +18,29 @@ type FilterState struct {
 	Status   string `yaml:"status,omitempty"`
 }
 
+// StatusFilter defines a named synthetic status filter group.
+// Each group appears in the status dropdown above individual Jira status names
+// and expands to a multi-status JQL condition when selected.
+type StatusFilter struct {
+	Name     string   `yaml:"name"`
+	Statuses []string `yaml:"statuses"`
+}
+
+// DefaultStatusFilters returns the built-in status filter groups.
+// These are used when no status_filters section is defined in the configuration.
+func DefaultStatusFilters() []StatusFilter {
+	return []StatusFilter{
+		{
+			Name:     "-Open-",
+			Statuses: []string{"Ready for Work", "In Progress", "On Hold", "Escalated"},
+		},
+		{
+			Name:     "-Active-",
+			Statuses: []string{"In Progress", "Escalated", "Testing in Progress"},
+		},
+	}
+}
+
 // IsEmpty returns true if no filters are applied.
 func (f *IssueFilter) IsEmpty() bool {
 	return (f.Project == "" || f.Project == "-All-") &&
@@ -93,6 +116,7 @@ type Config struct {
 	Projects      []Project       `yaml:"projects"`
 	Team          []TeamMember    `yaml:"team"`
 	Statuses      []string        `yaml:"statuses,omitempty"`
+	StatusFilters []StatusFilter  `yaml:"status_filters,omitempty"`
 	LastFilter    FilterState     `yaml:"last_filter,omitempty"`
 	ExcludeLabels []string        `yaml:"exclude_labels,omitempty"`
 }

@@ -187,7 +187,7 @@ func TestJQLBuilder_Build(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			builder := jira.NewJQLBuilder(tt.projects, tt.team)
+			builder := jira.NewJQLBuilder(tt.projects, tt.team, nil)
 			got := builder.Build(tt.filter)
 			if got != tt.want {
 				t.Errorf("Build() = %q\nwant %q", got, tt.want)
@@ -204,7 +204,7 @@ func TestJQLBuilder_EscapeSpecialCharacters(t *testing.T) {
 		{Name: `John "The Dev" Doe`, Email: "john@example.com"},
 	}
 
-	builder := jira.NewJQLBuilder(projects, team)
+	builder := jira.NewJQLBuilder(projects, team, nil)
 	filter := domain.IssueFilter{
 		Assignee: `John "The Dev" Doe`,
 	}
@@ -219,7 +219,7 @@ func TestJQLBuilder_EscapeSpecialCharacters(t *testing.T) {
 
 func TestJQLBuilder_OpenSentinel(t *testing.T) {
 	projects := []domain.Project{{Key: "PROJ", Name: "Project"}}
-	builder := jira.NewJQLBuilder(projects, nil)
+	builder := jira.NewJQLBuilder(projects, nil, nil)
 
 	got := builder.Build(domain.IssueFilter{Status: "-Open-"})
 	want := `project IN ("PROJ") AND status in ("Ready for Work", "In Progress", "On Hold", "Escalated") ORDER BY updated DESC`
@@ -234,7 +234,7 @@ func TestJQLBuilder_TeamSentinel(t *testing.T) {
 		{Name: "Alice", Email: "alice@example.com"},
 		{Name: "Bob", Email: "bob@example.com"},
 	}
-	builder := jira.NewJQLBuilder(projects, team)
+	builder := jira.NewJQLBuilder(projects, team, nil)
 
 	got := builder.Build(domain.IssueFilter{Assignee: "-Team-"})
 	want := `project IN ("PROJ") AND assignee in ("alice@example.com", "bob@example.com") ORDER BY updated DESC`
@@ -249,7 +249,7 @@ func TestJQLBuilder_NotTeamSentinel(t *testing.T) {
 		{Name: "Alice", Email: "alice@example.com"},
 		{Name: "Bob", Email: "bob@example.com"},
 	}
-	builder := jira.NewJQLBuilder(projects, team)
+	builder := jira.NewJQLBuilder(projects, team, nil)
 
 	got := builder.Build(domain.IssueFilter{Assignee: "-Not Team-"})
 	want := `project IN ("PROJ") AND assignee not in ("alice@example.com", "bob@example.com") ORDER BY updated DESC`
@@ -260,7 +260,7 @@ func TestJQLBuilder_NotTeamSentinel(t *testing.T) {
 
 func TestJQLBuilder_TeamSentinel_EmptyTeam(t *testing.T) {
 	projects := []domain.Project{{Key: "PROJ", Name: "Project"}}
-	builder := jira.NewJQLBuilder(projects, nil)
+	builder := jira.NewJQLBuilder(projects, nil, nil)
 
 	// -Team- with no team members → no assignee condition (treated as no filter)
 	got := builder.Build(domain.IssueFilter{Assignee: "-Team-"})
@@ -272,7 +272,7 @@ func TestJQLBuilder_TeamSentinel_EmptyTeam(t *testing.T) {
 
 func TestJQLBuilder_NotTeamSentinel_EmptyTeam(t *testing.T) {
 	projects := []domain.Project{{Key: "PROJ", Name: "Project"}}
-	builder := jira.NewJQLBuilder(projects, nil)
+	builder := jira.NewJQLBuilder(projects, nil, nil)
 
 	got := builder.Build(domain.IssueFilter{Assignee: "-Not Team-"})
 	want := `project IN ("PROJ") ORDER BY updated DESC`
@@ -283,12 +283,35 @@ func TestJQLBuilder_NotTeamSentinel_EmptyTeam(t *testing.T) {
 
 func TestJQLBuilder_ActiveSentinel(t *testing.T) {
 	projects := []domain.Project{{Key: "PROJ", Name: "Project"}}
-	builder := jira.NewJQLBuilder(projects, nil)
+	builder := jira.NewJQLBuilder(projects, nil, nil)
 
 	got := builder.Build(domain.IssueFilter{Status: "-Active-"})
 	want := `project IN ("PROJ") AND status in ("In Progress", "Escalated", "Testing in Progress") ORDER BY updated DESC`
 	if got != want {
 		t.Errorf("Build(Status=-Active-)\ngot  %q\nwant %q", got, want)
+	}
+}
+
+func TestJQLBuilder_CustomStatusFilters(t *testing.T) {
+	projects := []domain.Project{{Key: "PROJ", Name: "Project"}}
+	customFilters := []domain.StatusFilter{
+		{Name: "-Mine-", Statuses: []string{"In Progress", "In Review"}},
+	}
+	builder := jira.NewJQLBuilder(projects, nil, customFilters)
+
+	// Named group expands to multi-status clause
+	got := builder.Build(domain.IssueFilter{Status: "-Mine-"})
+	want := `project IN ("PROJ") AND status in ("In Progress", "In Review") ORDER BY updated DESC`
+	if got != want {
+		t.Errorf("Build(Status=-Mine-)\ngot  %q\nwant %q", got, want)
+	}
+
+	// Default sentinels are NOT present when custom filters are provided
+	got = builder.Build(domain.IssueFilter{Status: "-Open-"})
+	// -Open- is not a named group → treated as a literal Jira status name
+	want = `project IN ("PROJ") AND status in ("-Open-") ORDER BY updated DESC`
+	if got != want {
+		t.Errorf("Build(Status=-Open- with custom filters)\ngot  %q\nwant %q", got, want)
 	}
 }
 
@@ -306,7 +329,7 @@ func TestJQLBuilder_StatusPassthrough(t *testing.T) {
 	}
 
 	projects := []domain.Project{{Key: "PROJ", Name: "Project"}}
-	builder := jira.NewJQLBuilder(projects, nil)
+	builder := jira.NewJQLBuilder(projects, nil, nil)
 
 	for _, tt := range tests {
 		t.Run(tt.status, func(t *testing.T) {

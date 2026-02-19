@@ -37,7 +37,7 @@ mindmap
 Filter Jira tickets by:
 - **Team member**: Select by name or alias, filter by email
 - **Project**: Choose from configured projects
-- **Status**: All, Open, Ready, In Test, Done
+- **Status**: `All`, named filter groups, or individual Jira status names. Groups (e.g. `-Open-`, `-Active-`) are user-defined in `config.yaml` and each expand to multiple statuses in JQL.
 
 ### Attention Indicators
 

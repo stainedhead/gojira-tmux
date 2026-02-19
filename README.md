@@ -19,6 +19,7 @@ A terminal-based Jira viewer for development teams. View and filter tickets dire
 ## Features
 
 - **Team filtering** - Filter tickets by team member, project, or status
+- **Custom status groups** - Define named multi-status filter groups (e.g. `-Open-`, `-Active-`) in `config.yaml`
 - **Team member aliases** - Short aliases for quick filtering (e.g., "JohnA" instead of "John Anderson")
 - **Attention indicators** - Red/yellow dots flag issues needing attention
 - **Keyboard navigation** - Full TUI with vim-style keys

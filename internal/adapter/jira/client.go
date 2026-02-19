@@ -23,13 +23,15 @@ type Client struct {
 }
 
 // NewClient creates a new Jira client.
-func NewClient(baseURL, username, token string, projects []domain.Project, team []domain.TeamMember) *Client {
+// statusFilters defines the named filter groups for the status dropdown.
+// If nil or empty, the default built-in groups are used.
+func NewClient(baseURL, username, token string, projects []domain.Project, team []domain.TeamMember, statusFilters []domain.StatusFilter) *Client {
 	return &Client{
 		baseURL:    baseURL,
 		username:   username,
 		token:      token,
 		httpClient: &http.Client{Timeout: 30 * time.Second},
-		jqlBuilder: NewJQLBuilder(projects, team),
+		jqlBuilder: NewJQLBuilder(projects, team, statusFilters),
 	}
 }
 

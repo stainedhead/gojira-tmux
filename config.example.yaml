@@ -25,3 +25,41 @@ team:
   - name: "Jane Smith"
     email: "jane.smith@company.com"
     # alias is optional - members without aliases are matched by name
+
+# status_filters defines named filter groups that appear in the Status dropdown
+# above individual Jira status names.  Each group expands to a multi-status JQL
+# condition when selected.
+#
+# If this section is omitted, the following built-in defaults are used:
+#
+# status_filters:
+#   - name: "-Open-"
+#     statuses:
+#       - "Ready for Work"
+#       - "In Progress"
+#       - "On Hold"
+#       - "Escalated"
+#   - name: "-Active-"
+#     statuses:
+#       - "In Progress"
+#       - "Escalated"
+#       - "Testing in Progress"
+#
+# Example: replace the defaults with project-specific groups
+status_filters:
+  - name: "-Open-"
+    statuses:
+      - "Ready for Work"
+      - "In Progress"
+      - "On Hold"
+      - "Escalated"
+  - name: "-Active-"
+    statuses:
+      - "In Progress"
+      - "Escalated"
+      - "Testing in Progress"
+  # Add your own groups, e.g.:
+  # - name: "-My Work-"
+  #   statuses:
+  #     - "In Progress"
+  #     - "In Review"

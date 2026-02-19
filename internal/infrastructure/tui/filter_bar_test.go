@@ -20,7 +20,7 @@ func TestFilterBar_DisplayName_WithAlias(t *testing.T) {
 		{Key: "PROJ", Name: "Project"},
 	}
 
-	fb := tui.NewFilterBar(team, projects, testStatuses)
+	fb := tui.NewFilterBar(team, projects, testStatuses, nil)
 	view := fb.View()
 
 	// Verify the filter bar renders without crashing
@@ -37,7 +37,7 @@ func TestFilterBar_GetFilter_DefaultsToAll(t *testing.T) {
 		{Key: "PROJ", Name: "Project"},
 	}
 
-	fb := tui.NewFilterBar(team, projects, testStatuses)
+	fb := tui.NewFilterBar(team, projects, testStatuses, nil)
 	filter := fb.GetFilter()
 
 	if filter.Assignee != "-All-" {
@@ -59,7 +59,7 @@ func TestFilterBar_BackwardCompatibility_NoAlias(t *testing.T) {
 		{Key: "PROJ", Name: "Project"},
 	}
 
-	fb := tui.NewFilterBar(team, projects, testStatuses)
+	fb := tui.NewFilterBar(team, projects, testStatuses, nil)
 
 	// Should not crash with members that have no alias
 	view := fb.View()
@@ -76,7 +76,7 @@ func TestFilterBar_HasActiveFilters(t *testing.T) {
 		{Key: "PROJ", Name: "Project"},
 	}
 
-	fb := tui.NewFilterBar(team, projects, testStatuses)
+	fb := tui.NewFilterBar(team, projects, testStatuses, nil)
 
 	if fb.HasActiveFilters() {
 		t.Error("HasActiveFilters() = true for default filter bar")
@@ -91,7 +91,7 @@ func TestFilterBar_ClearFilters(t *testing.T) {
 		{Key: "PROJ", Name: "Project"},
 	}
 
-	fb := tui.NewFilterBar(team, projects, testStatuses)
+	fb := tui.NewFilterBar(team, projects, testStatuses, nil)
 	fb.ClearFilters()
 
 	filter := fb.GetFilter()
@@ -108,7 +108,7 @@ func TestFilterBar_SetFilter(t *testing.T) {
 		{Key: "PROJ", Name: "Project"},
 	}
 
-	fb := tui.NewFilterBar(team, projects, testStatuses)
+	fb := tui.NewFilterBar(team, projects, testStatuses, nil)
 
 	// Set a filter with the display name (which includes alias)
 	fb.SetFilter(domain.IssueFilter{
@@ -134,7 +134,7 @@ func TestFilterBar_DynamicStatuses(t *testing.T) {
 	projects := []domain.Project{{Key: "PROJ", Name: "Project"}}
 	customStatuses := []string{"Backlog", "In Sprint", "Review", "Released"}
 
-	fb := tui.NewFilterBar(team, projects, customStatuses)
+	fb := tui.NewFilterBar(team, projects, customStatuses, nil)
 
 	// First status is always "All"
 	filter := fb.GetFilter()
@@ -154,7 +154,7 @@ func TestFilterBar_EmptyStatuses_FallsBackToDefaults(t *testing.T) {
 	team := []domain.TeamMember{{Name: "Alice", Email: "alice@example.com"}}
 	projects := []domain.Project{{Key: "PROJ", Name: "Project"}}
 
-	fb := tui.NewFilterBar(team, projects, nil)
+	fb := tui.NewFilterBar(team, projects, nil, nil)
 
 	filter := fb.GetFilter()
 	if filter.Status != "All" {
@@ -169,6 +169,7 @@ func TestFilterBar_Dropdown_ClosedByDefault(t *testing.T) {
 		[]domain.TeamMember{{Name: "Alice", Email: "alice@example.com"}},
 		[]domain.Project{{Key: "PROJ", Name: "Project"}},
 		testStatuses,
+		nil,
 	)
 
 	if fb.DropdownOpen() {
@@ -181,6 +182,7 @@ func TestFilterBar_Dropdown_OpensOnEnter(t *testing.T) {
 		[]domain.TeamMember{{Name: "Alice", Email: "alice@example.com"}},
 		[]domain.Project{{Key: "PROJ", Name: "Project"}},
 		testStatuses,
+		nil,
 	)
 	fb.Focus()
 
@@ -195,6 +197,7 @@ func TestFilterBar_Dropdown_ClosesOnEsc(t *testing.T) {
 		[]domain.TeamMember{{Name: "Alice", Email: "alice@example.com"}},
 		[]domain.Project{{Key: "PROJ", Name: "Project"}},
 		testStatuses,
+		nil,
 	)
 	fb.Focus()
 
@@ -216,6 +219,7 @@ func TestFilterBar_Dropdown_EscDoesNotChangeSelection(t *testing.T) {
 		[]domain.TeamMember{{Name: "Alice", Email: "alice@example.com"}},
 		[]domain.Project{{Key: "PROJ", Name: "Project"}},
 		testStatuses,
+		nil,
 	)
 	fb.Focus()
 
@@ -238,6 +242,7 @@ func TestFilterBar_Dropdown_EnterConfirmsSelection(t *testing.T) {
 		[]domain.TeamMember{{Name: "Alice", Email: "alice@example.com"}},
 		[]domain.Project{{Key: "PROJ", Name: "Project"}},
 		testStatuses,
+		nil,
 	)
 	fb.Focus()
 
@@ -270,6 +275,7 @@ func TestFilterBar_Dropdown_ViewContainsOptions(t *testing.T) {
 		[]domain.TeamMember{{Name: "Alice", Email: "alice@example.com"}},
 		[]domain.Project{{Key: "PROJ", Name: "Project"}},
 		testStatuses,
+		nil,
 	)
 	fb.Focus()
 
@@ -291,6 +297,7 @@ func TestFilterBar_Dropdown_HelpTextChanges(t *testing.T) {
 		[]domain.TeamMember{{Name: "Alice", Email: "alice@example.com"}},
 		[]domain.Project{{Key: "PROJ", Name: "Project"}},
 		testStatuses,
+		nil,
 	)
 	fb.Focus()
 
@@ -314,6 +321,7 @@ func TestFilterBar_OpenSentinel_InStatusList(t *testing.T) {
 		[]domain.TeamMember{{Name: "Alice", Email: "alice@example.com"}},
 		[]domain.Project{{Key: "PROJ", Name: "Project"}},
 		testStatuses,
+		nil,
 	)
 	fb.Focus()
 
@@ -333,6 +341,7 @@ func TestFilterBar_OpenSentinel_CanBeSelected(t *testing.T) {
 		[]domain.TeamMember{{Name: "Alice", Email: "alice@example.com"}},
 		[]domain.Project{{Key: "PROJ", Name: "Project"}},
 		testStatuses,
+		nil,
 	)
 	fb.Focus()
 
@@ -355,6 +364,7 @@ func TestFilterBar_SetStatuses_KeepsValidSelection(t *testing.T) {
 		[]domain.TeamMember{{Name: "Alice", Email: "alice@example.com"}},
 		[]domain.Project{{Key: "PROJ", Name: "Project"}},
 		[]string{"In Progress", "Done"},
+		nil,
 	)
 
 	// Select "In Progress"
@@ -375,6 +385,7 @@ func TestFilterBar_SetStatuses_ResetsInvalidSelection(t *testing.T) {
 		[]domain.TeamMember{{Name: "Alice", Email: "alice@example.com"}},
 		[]domain.Project{{Key: "PROJ", Name: "Project"}},
 		[]string{"In Progress", "Done"},
+		nil,
 	)
 
 	// Select "Done"
@@ -392,6 +403,7 @@ func TestFilterBar_SetStatuses_KeepsOpenSentinel(t *testing.T) {
 		[]domain.TeamMember{{Name: "Alice", Email: "alice@example.com"}},
 		[]domain.Project{{Key: "PROJ", Name: "Project"}},
 		testStatuses,
+		nil,
 	)
 
 	// Select -Open-
@@ -409,6 +421,7 @@ func TestFilterBar_SetStatuses_OpenSentinelAlwaysPresent(t *testing.T) {
 		[]domain.TeamMember{{Name: "Alice", Email: "alice@example.com"}},
 		[]domain.Project{{Key: "PROJ", Name: "Project"}},
 		[]string{"To Do"},
+		nil,
 	)
 	fb.SetStatuses([]string{"Backlog", "Released"})
 
@@ -427,6 +440,66 @@ func TestFilterBar_SetStatuses_OpenSentinelAlwaysPresent(t *testing.T) {
 	}
 }
 
+// --- Custom status filter group tests ---
+
+func TestFilterBar_CustomStatusFilters_AppearInDropdown(t *testing.T) {
+	customFilters := []domain.StatusFilter{
+		{Name: "-Mine-", Statuses: []string{"In Progress", "In Review"}},
+		{Name: "-Blocked-", Statuses: []string{"On Hold", "Escalated"}},
+	}
+	fb := tui.NewFilterBar(
+		[]domain.TeamMember{{Name: "Alice", Email: "alice@example.com"}},
+		[]domain.Project{{Key: "PROJ", Name: "Project"}},
+		testStatuses,
+		customFilters,
+	)
+	fb.Focus()
+
+	// Tab to Status, open dropdown
+	fb, _ = fb.Update(tea.KeyMsg{Type: tea.KeyTab})
+	fb, _ = fb.Update(tea.KeyMsg{Type: tea.KeyTab})
+	fb, _ = fb.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	view := fb.View()
+
+	if !contains(view, "-Mine-") {
+		t.Error("Status dropdown should contain custom group -Mine-")
+	}
+	if !contains(view, "-Blocked-") {
+		t.Error("Status dropdown should contain custom group -Blocked-")
+	}
+	// Default sentinels should NOT appear when custom filters are provided
+	if contains(view, "-Open-") {
+		t.Error("Status dropdown should not contain -Open- when custom filters are defined")
+	}
+	if contains(view, "-Active-") {
+		t.Error("Status dropdown should not contain -Active- when custom filters are defined")
+	}
+}
+
+func TestFilterBar_CustomStatusFilters_CanBeSelected(t *testing.T) {
+	customFilters := []domain.StatusFilter{
+		{Name: "-Mine-", Statuses: []string{"In Progress", "In Review"}},
+	}
+	fb := tui.NewFilterBar(
+		[]domain.TeamMember{{Name: "Alice", Email: "alice@example.com"}},
+		[]domain.Project{{Key: "PROJ", Name: "Project"}},
+		testStatuses,
+		customFilters,
+	)
+	fb.Focus()
+
+	// Tab to Status, open, move down once (All → -Mine-), confirm
+	fb, _ = fb.Update(tea.KeyMsg{Type: tea.KeyTab})
+	fb, _ = fb.Update(tea.KeyMsg{Type: tea.KeyTab})
+	fb, _ = fb.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	fb, _ = fb.Update(tea.KeyMsg{Type: tea.KeyDown})
+	fb, _ = fb.Update(tea.KeyMsg{Type: tea.KeyEnter})
+
+	if fb.GetFilter().Status != "-Mine-" {
+		t.Errorf("Status = %q, want -Mine-", fb.GetFilter().Status)
+	}
+}
+
 // --- -Team- / -Not Team- member tests ---
 
 func TestFilterBar_TeamSentinels_PresentWithNonEmptyTeam(t *testing.T) {
@@ -434,7 +507,7 @@ func TestFilterBar_TeamSentinels_PresentWithNonEmptyTeam(t *testing.T) {
 		{Name: "Alice", Email: "alice@example.com"},
 		{Name: "Bob", Email: "bob@example.com"},
 	}
-	fb := tui.NewFilterBar(team, []domain.Project{{Key: "PROJ", Name: "Project"}}, testStatuses)
+	fb := tui.NewFilterBar(team, []domain.Project{{Key: "PROJ", Name: "Project"}}, testStatuses, nil)
 	fb.Focus()
 
 	// Open Member dropdown
@@ -450,7 +523,7 @@ func TestFilterBar_TeamSentinels_PresentWithNonEmptyTeam(t *testing.T) {
 }
 
 func TestFilterBar_TeamSentinels_AbsentWithEmptyTeam(t *testing.T) {
-	fb := tui.NewFilterBar(nil, []domain.Project{{Key: "PROJ", Name: "Project"}}, testStatuses)
+	fb := tui.NewFilterBar(nil, []domain.Project{{Key: "PROJ", Name: "Project"}}, testStatuses, nil)
 	fb.Focus()
 
 	fb, _ = fb.Update(tea.KeyMsg{Type: tea.KeyEnter})
@@ -468,7 +541,7 @@ func TestFilterBar_TeamSentinel_CanBeSelected(t *testing.T) {
 	team := []domain.TeamMember{
 		{Name: "Alice", Email: "alice@example.com"},
 	}
-	fb := tui.NewFilterBar(team, []domain.Project{{Key: "PROJ", Name: "Project"}}, testStatuses)
+	fb := tui.NewFilterBar(team, []domain.Project{{Key: "PROJ", Name: "Project"}}, testStatuses, nil)
 	fb.Focus()
 
 	// Open dropdown, move down once (-All- → -Team-), confirm
@@ -485,7 +558,7 @@ func TestFilterBar_NotTeamSentinel_CanBeSelected(t *testing.T) {
 	team := []domain.TeamMember{
 		{Name: "Alice", Email: "alice@example.com"},
 	}
-	fb := tui.NewFilterBar(team, []domain.Project{{Key: "PROJ", Name: "Project"}}, testStatuses)
+	fb := tui.NewFilterBar(team, []domain.Project{{Key: "PROJ", Name: "Project"}}, testStatuses, nil)
 	fb.Focus()
 
 	// Open dropdown, move down twice (-All- → -Team- → -Not Team-), confirm

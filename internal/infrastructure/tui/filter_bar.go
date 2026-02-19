@@ -26,9 +26,10 @@ const maxDropdownVisible = 8
 
 // FilterBar is a component for filtering issues.
 type FilterBar struct {
-	focus   FilterFocus
-	focused bool
-	width   int
+	focus         FilterFocus
+	focused       bool
+	width         int
+	statusFilters []domain.StatusFilter
 
 	// Options
 	members  []string
@@ -73,9 +74,11 @@ func (f *FilterBar) ExtraHeight() int {
 var defaultFallbackStatuses = []string{"To Do", "In Progress", "In Review", "Done"}
 
 // NewFilterBar creates a new filter bar.
-// statuses contains the Jira status names (e.g. from ListStatuses). "All" and "-Open-" are prepended automatically.
+// statuses contains the Jira status names (e.g. from ListStatuses).
+// statusFilters defines the named filter groups prepended to the status dropdown.
+// If statusFilters is nil or empty, domain.DefaultStatusFilters() is used.
 // If statuses is empty, a built-in fallback list is used.
-func NewFilterBar(team []domain.TeamMember, projects []domain.Project, statuses []string) *FilterBar {
+func NewFilterBar(team []domain.TeamMember, projects []domain.Project, statuses []string, statusFilters []domain.StatusFilter) *FilterBar {
 	// Build member options using DisplayName for alias support.
 	// Synthetic group options are inserted after "-All-" when team is non-empty.
 	members := []string{"-All-"}
@@ -92,26 +95,36 @@ func NewFilterBar(team []domain.TeamMember, projects []domain.Project, statuses 
 		projectOpts = append(projectOpts, p.Key)
 	}
 
-	statusOpts := buildStatusOptions(statuses)
+	sf := statusFilters
+	if len(sf) == 0 {
+		sf = domain.DefaultStatusFilters()
+	}
+	statusOpts := buildStatusOptions(statuses, sf)
 
 	return &FilterBar{
-		focus:    FilterFocusMember,
-		focused:  false,
-		members:  members,
-		projects: projectOpts,
-		statuses: statusOpts,
+		focus:         FilterFocusMember,
+		focused:       false,
+		members:       members,
+		projects:      projectOpts,
+		statuses:      statusOpts,
+		statusFilters: sf,
 	}
 }
 
-// buildStatusOptions constructs the status option list from raw status names.
-// Always: ["All", "-Open-", "-Active-", ...real statuses...]
-func buildStatusOptions(statuses []string) []string {
+// buildStatusOptions constructs the status option list from raw status names and filter groups.
+// Result order: ["All", ...statusFilter names..., ...real Jira statuses (deduped)]
+func buildStatusOptions(statuses []string, statusFilters []domain.StatusFilter) []string {
 	src := statuses
 	if len(src) == 0 {
 		src = defaultFallbackStatuses
 	}
-	synthetic := map[string]bool{"All": true, "-Open-": true, "-Active-": true}
-	opts := []string{"All", "-Open-", "-Active-"}
+	// "All" and each filter group name are synthetic — exclude from real statuses.
+	synthetic := map[string]bool{"All": true}
+	opts := []string{"All"}
+	for _, sf := range statusFilters {
+		synthetic[sf.Name] = true
+		opts = append(opts, sf.Name)
+	}
 	for _, s := range src {
 		if !synthetic[s] {
 			opts = append(opts, s)
@@ -125,7 +138,7 @@ func buildStatusOptions(statuses []string) []string {
 // otherwise the selection resets to index 0 ("All").
 func (f *FilterBar) SetStatuses(statuses []string) {
 	current := f.statuses[f.statusIdx]
-	f.statuses = buildStatusOptions(statuses)
+	f.statuses = buildStatusOptions(statuses, f.statusFilters)
 
 	// Try to keep the current selection
 	for i, s := range f.statuses {

@@ -60,6 +60,7 @@ func run() error {
 		storedToken,
 		cfg.Projects,
 		cfg.Team,
+		cfg.StatusFilters,
 	)
 
 	// Fetch available Jira statuses (best-effort; falls back to config or defaults)
