@@ -14,8 +14,8 @@ import (
 // Fixed column content widths (excluding padding).
 const (
 	colWidthIndicator   = 10
-	colWidthKey         = 15
-	colWidthStatus      = 15
+	colWidthKey         = 11
+	colWidthStatus      = 17
 	colWidthPriority    = 8
 	colWidthAssignee    = 18
 	colWidthDueDate     = 10
@@ -32,7 +32,7 @@ const colPad = 1
 const tableNumCols = 9
 
 // fixedColsWidth is the total content width of all non-summary columns.
-// = 10+15+15+8+18+10+12+18 = 106
+// = 10+11+17+8+18+10+12+18 = 104
 const fixedColsWidth = colWidthIndicator + colWidthKey + colWidthStatus + colWidthPriority +
 	colWidthAssignee + colWidthDueDate + colWidthLastComment + colWidthLabels
 
@@ -68,7 +68,7 @@ func NewTicketsTable() *TicketsTable {
 // cols returns the column definitions for the current summaryWidth.
 func (t *TicketsTable) cols() []tableCol {
 	return []tableCol{
-		{"  Issues", colWidthIndicator},
+		{"Issues", colWidthIndicator},
 		{"Key", colWidthKey},
 		{"Summary", t.summaryWidth},
 		{"Status", colWidthStatus},
@@ -305,8 +305,7 @@ func (t *TicketsTable) getAttentionIndicator(issue domain.Issue, isSelected bool
 			}
 			return "○"
 		}
-		return "  " +
-			dot(issue.HasStaleIndicator()) + " " +
+		return dot(issue.HasStaleIndicator()) + " " +
 			dot(issue.HasNoDueDateIndicator()) + " " +
 			dot(issue.HasOverdueIndicator())
 	}
@@ -316,8 +315,7 @@ func (t *TicketsTable) getAttentionIndicator(issue domain.Issue, isSelected bool
 		}
 		return Styles.DotEmpty.String()
 	}
-	return "  " +
-		dot(issue.HasStaleIndicator(), Styles.DotRed) + " " +
+	return dot(issue.HasStaleIndicator(), Styles.DotRed) + " " +
 		dot(issue.HasNoDueDateIndicator(), Styles.DotYellow) + " " +
 		dot(issue.HasOverdueIndicator(), Styles.DotCyan)
 }
