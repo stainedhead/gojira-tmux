@@ -42,8 +42,9 @@ Filter Jira tickets by:
 ### Attention Indicators
 
 Visual flags for tickets requiring attention:
-- **Red dot**: Open issue with no owner comment in 14+ days
+- **Red dot**: Open issue with no owner comment in 14+ days (stale)
 - **Yellow dot**: Open issue with no due date set
+- **Cyan dot**: Issue with a due date that has passed (overdue)
 
 ### Atlassian API Token Authentication
 

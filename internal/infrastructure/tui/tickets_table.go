@@ -263,7 +263,7 @@ func (t *TicketsTable) renderIssueRow(cols []tableCol, idx int, sep string) stri
 		t.getAttentionIndicator(issue, isSelected),
 		issue.Key,
 		truncate(issue.Summary, t.summaryWidth),
-		issue.Status,
+		truncate(issue.Status, colWidthStatus),
 		issue.Priority,
 		truncate(assignee, colWidthAssignee),
 		formatDueDate(issue.DueDate),

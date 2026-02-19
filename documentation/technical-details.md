@@ -131,6 +131,7 @@ Token validation is performed against `/rest/api/3/myself` which returns the aut
 | `/rest/api/3/myself` | GET | Token validation |
 | `/rest/api/3/search/jql` | GET | JQL queries (cursor-based pagination via `nextPageToken`) |
 | `/rest/api/3/issue/{key}` | GET | Issue details (with ADF description) |
+| `/rest/api/3/status` | GET | Fetch all workflow statuses for the filter bar |
 
 ### JQL Query Patterns
 
@@ -146,23 +147,17 @@ project = "{key}" ORDER BY updated DESC
 
 **Filter by status:**
 ```
-status = "{status}" ORDER BY updated DESC
+status in ("{status}") ORDER BY updated DESC
 ```
 
 **Combined filter:**
 ```
-assignee = "{email}" AND project = "{key}" AND status = "{status}" ORDER BY updated DESC
+assignee = "{email}" AND project = "{key}" AND status in ("{status}") ORDER BY updated DESC
 ```
 
-### Status Mappings
+### Status Filter
 
-| UI Filter | JQL Status |
-|-----------|------------|
-| All | (no filter) |
-| Open | `"Open"` |
-| Ready | `"Ready for Development"` |
-| In Test | `"In Test"` |
-| Done | `"Done"` |
+Status options are fetched dynamically from `/rest/api/3/status` scoped to the configured projects. The status string from the API is used directly in the JQL `status in ("X")` clause — no translation layer. A special `-Active-` sentinel is available that expands to all non-Done statuses.
 
 ## BubbleTea Component Architecture
 

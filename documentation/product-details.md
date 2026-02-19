@@ -86,28 +86,33 @@ Users without a stored Jira API token see the setup screen:
 |-----------|---------|----------|
 | Project | `-All-` + configured projects | Filters tickets by project key |
 | Member | `-All-` + configured team members | Filters by assignee email |
-| Status | All, Open, Ready, In Test, Done | Filters by ticket status |
+| Status | `All`, `-Active-` + live Jira status names fetched from API | Filters by ticket status |
+
+Filter selections are persisted to `config.yaml` and restored on next launch.
 
 ### Tickets Table
 
 | Column | Description |
 |--------|-------------|
-| Indicator | Attention flag (red/yellow dot) |
+| Issues | Three attention indicator dots (red/yellow/cyan) |
 | Key | Jira issue key (e.g., PROJ-123) |
-| Summary | Issue title |
-| Status | Current workflow status |
-| Assignee | Assigned team member |
+| Summary | Issue title (truncated to fit) |
+| Status | Current workflow status (truncated to fit) |
 | Priority | Issue priority |
-| Due Date | Expected completion date |
-| Updated | Last update timestamp |
+| Assignee | Assigned team member |
+| Due Date | Expected completion date (YYYY-MM-DD or "none") |
+| Last Comment | Relative time since last comment (e.g., "3d ago") |
+| Labels | Comma-separated issue labels |
 
 ### Attention Indicators
 
+Three independent dots are shown per row (red, yellow, cyan). Each is filled (●) when active or empty (○) otherwise.
+
 | Indicator | Condition |
 |-----------|-----------|
-| 🔴 Red | Open + no owner comment in 14+ days |
-| 🟡 Yellow | Open + no due date set |
-| (empty) | No attention required |
+| 🔴 Red | No owner comment in 14+ days (stale) |
+| 🟡 Yellow | No due date set |
+| 🔵 Cyan | Due date has passed (overdue) |
 
 ### Properties Panel
 
@@ -128,20 +133,41 @@ Displays fields not shown in main table:
 
 ## Keyboard Navigation
 
+### Tickets Table
+
 | Key | Action |
 |-----|--------|
 | `↑` / `k` | Move selection up |
 | `↓` / `j` | Move selection down |
-| `←` / `h` | Previous option (in filter bar) |
-| `→` / `l` | Next option (in filter bar) |
-| `Tab` | Cycle focus between panels |
-| `Shift+Tab` | Reverse cycle focus |
-| `Enter` | Select/activate or view issue details |
-| `f` | Focus filter bar |
-| `r` | Refresh current view |
-| `q` | Quit application |
-| `c` | Cancel (during auth) |
-| `Esc` | Close details or cancel/back |
+| `g` / `Home` | Jump to first row |
+| `G` / `End` | Jump to last row |
+| `f` / `PgDn` / `Space` | Page down |
+| `b` / `PgUp` | Page up |
+| `Enter` | View issue details |
+| `Tab` | Switch focus to filter bar |
+| `r` | Refresh |
+| `q` | Quit |
+
+### Filter Bar
+
+| Key | Action |
+|-----|--------|
+| `←` / `h` | Focus previous dropdown |
+| `→` / `l` | Focus next dropdown |
+| `Enter` / `Space` | Open dropdown list |
+| `↑` / `↓` | Navigate dropdown options (when open) |
+| `Enter` | Confirm selection (when open) |
+| `Esc` | Close dropdown / return to table |
+| `Tab` | Switch focus back to table |
+
+### Detail View
+
+| Key | Action |
+|-----|--------|
+| `↑` / `↓` | Scroll properties or comments |
+| `Tab` | Switch between properties and comments panels |
+| `Esc` | Return to ticket list |
+| `q` | Quit |
 
 ## Configuration
 

@@ -77,14 +77,13 @@ gojira
 
 | Key | Action |
 |-----|--------|
-| `↑`/`k` | Move up |
-| `↓`/`j` | Move down |
-| `Tab` | Switch focus between panels |
-| `Shift+Tab` | Reverse switch focus |
+| `↑`/`k`, `↓`/`j` | Navigate tickets |
 | `Enter` | View issue details |
-| `f` | Focus filter bar |
+| `Tab` | Switch focus (table ↔ filter bar) |
+| `←`/`→` | Cycle filter dropdowns |
+| `Enter`/`Space` | Open filter dropdown |
 | `r` | Refresh |
-| `Esc` | Close details/cancel |
+| `Esc` | Close details / close dropdown |
 | `q` | Quit |
 
 ## Documentation
